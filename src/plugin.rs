@@ -1,3 +1,4 @@
+use crate::sphere::ShapesBindGroup;
 use crate::RenderTargetImage;
 use bevy::{
     math::Vec3Swizzles,
@@ -19,6 +20,7 @@ use crate::RENDER_TARGET_SIZE;
 
 #[derive(Copy, Clone, Debug, ShaderType)]
 pub struct RayTraceUniformRaw {
+    pub frame: u32,
     pub render_width: u32,
     pub render_height: u32,
 
@@ -62,12 +64,16 @@ fn prepare_uniform(
     mut rt_uniform: ResMut<RayTraceUniform>,
     render_queue: Res<RenderQueue>,
     render_device: Res<RenderDevice>,
+    mut frame: Local<u32>,
 ) {
+    *frame += 1;
+
     rt_uniform.buffer.clear();
 
     let transform = gpu_camera.transform;
 
     rt_uniform.buffer.push(RayTraceUniformRaw {
+        frame: *frame,
         render_width: RENDER_TARGET_SIZE.0,
         render_height: RENDER_TARGET_SIZE.1,
         camera_forward: transform.forward().xyzz(),
@@ -109,7 +115,8 @@ fn queue_bind_group(
 }
 
 pub struct RayTracePipeline {
-    texture_bind_group_layout: BindGroupLayout,
+    pub texture_bind_group_layout: BindGroupLayout,
+    pub shapes_bind_group_layout: BindGroupLayout,
     init_pipeline: CachedComputePipelineId,
     update_pipeline: CachedComputePipelineId,
 }
@@ -145,6 +152,23 @@ impl FromWorld for RayTracePipeline {
                     ],
                 });
 
+        let shapes_bind_group_layout =
+            world
+                .resource::<RenderDevice>()
+                .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                    label: None,
+                    entries: &[BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::COMPUTE,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                });
+
         let shader = world
             .resource::<AssetServer>()
             .load("shaders/raytrace.wgsl");
@@ -152,7 +176,10 @@ impl FromWorld for RayTracePipeline {
         let mut pipeline_cache = world.resource_mut::<PipelineCache>();
         let init_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
             label: None,
-            layout: Some(vec![texture_bind_group_layout.clone()]),
+            layout: Some(vec![
+                texture_bind_group_layout.clone(),
+                shapes_bind_group_layout.clone(),
+            ]),
             shader: shader.clone(),
             shader_defs: vec![],
             entry_point: Cow::from("init"),
@@ -160,7 +187,10 @@ impl FromWorld for RayTracePipeline {
 
         let update_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
             label: None,
-            layout: Some(vec![texture_bind_group_layout.clone()]),
+            layout: Some(vec![
+                texture_bind_group_layout.clone(),
+                shapes_bind_group_layout.clone(),
+            ]),
             shader,
             shader_defs: vec![],
             entry_point: Cow::from("update"),
@@ -168,6 +198,7 @@ impl FromWorld for RayTracePipeline {
 
         RayTracePipeline {
             texture_bind_group_layout,
+            shapes_bind_group_layout,
             init_pipeline,
             update_pipeline,
         }
@@ -224,6 +255,7 @@ impl render_graph::Node for RayTraceNode {
         world: &World,
     ) -> Result<(), render_graph::NodeRunError> {
         let texture_bind_group = &world.resource::<RenderTargetImageBindGroup>().0;
+        let shapes_bind_group = &world.resource::<ShapesBindGroup>().0;
         let pipeline_cache = world.resource::<PipelineCache>();
         let pipeline = world.resource::<RayTracePipeline>();
 
@@ -232,6 +264,7 @@ impl render_graph::Node for RayTraceNode {
             .begin_compute_pass(&ComputePassDescriptor::default());
 
         pass.set_bind_group(0, texture_bind_group, &[]);
+        pass.set_bind_group(1, shapes_bind_group, &[]);
 
         // select the pipeline based on the current state
         match self.state {

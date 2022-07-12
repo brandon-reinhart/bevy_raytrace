@@ -1,5 +1,6 @@
 mod camera;
 mod plugin;
+mod sphere;
 
 use bevy::{
     prelude::*,
@@ -9,6 +10,7 @@ use bevy::{
 
 use camera::CameraPlugin;
 use plugin::RayTracePlugin;
+use sphere::SphereRenderPlugin;
 
 pub const RENDER_TARGET_SIZE: (u32, u32) = (1024, 1024);
 
@@ -26,8 +28,12 @@ pub fn entry() {
         .add_plugins(DefaultPlugins)
         .add_plugin(CameraPlugin)
         .add_plugin(RayTracePlugin)
+        .add_plugin(SphereRenderPlugin)
+        //.add_plugin(ExtractComponentPlugin::<sphere::Sphere>::default())
+        //.add_pluign(UniformComponentPlugin::<sphere::Sphere>::default())
         .add_startup_system(init_camera)
         .add_startup_system(init_render_target)
+        //        .add_startup_system(sphere::init_spheres)
         .add_system(on_window_resized)
         .run();
 }
