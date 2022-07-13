@@ -1,6 +1,9 @@
 mod camera;
 mod plugin;
 mod sphere;
+mod ray_trace_pipeline;
+mod ray_trace_node;
+mod ray_trace_globals;
 
 use bevy::{
     prelude::*,

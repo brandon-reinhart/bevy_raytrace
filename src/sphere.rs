@@ -1,4 +1,4 @@
-use crate::plugin::RayTracePipeline;
+use crate::ray_trace_pipeline::RayTracePipeline;
 use bevy::{
     prelude::*,
     render::{
@@ -100,6 +100,7 @@ fn queue_spheres(
     pipeline: Res<RayTracePipeline>,
     render_device: Res<RenderDevice>,
 ) {
+    /*
     let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
         label: None,
         layout: &pipeline.shapes_bind_group_layout,
@@ -110,4 +111,5 @@ fn queue_spheres(
     });
 
     commands.insert_resource(ShapesBindGroup(bind_group));
+    */
 }

@@ -19,10 +19,15 @@ struct hit {
     p: vec3<f32>;
     n: vec3<f32>;
     front_face: bool;
+    c: vec4<f32>;
+    can_extend: bool;
+    extend: ray;
 };
 
 fn default_hit() -> hit {
-    return hit ( f32(0.0), vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0), false);
+    return hit ( f32(0.0), vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0), false, 
+    vec4<f32>(0.0, 0.0, 0.0, 0.0),
+    false, ray(vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0,0.0,0.0)));
 }
 
 struct sphere {
@@ -160,21 +165,23 @@ fn hit_sphere(r: ray, hit_result: hit ) -> vec4<f32> {
     return vec4<f32>(0.5 * (hit_result.n + vec3<f32>(1.0, 1.0, 1.0)), 1.0);
 }
 
-fn miss(r: ray) -> vec4<f32> {
+fn miss(r: ray) -> hit {
     let unit = normalize(r.dir);
     let t = 0.5 * unit.y + 1.0;
     let sky_gradient = (1.0-t) * vec3<f32>(1.0, 1.0, 1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
 
-    return vec4<f32>(sky_gradient, 1.0);
+    var hit = default_hit();
+    hit.c = vec4<f32>(sky_gradient, 1.0);
+    return hit;
 }
 
-fn intersect_world(r: ray) -> vec4<f32> {
-    for(var i: i32 = 0; i < i32(objects.sphere_count); i = i + 1 ) {
-        let hit_result = intersect_sphere2( r, objects.spheres[i], 0.0, 2000.0 );
-        if ( hit_result.t > 0.0 ) {
-            return hit_sphere( r, hit_result );
-        }        
-    }
+fn intersect_world(r: ray) -> hit {
+//    for(var i: i32 = 0; i < i32(objects.sphere_count); i = i + 1 ) {
+  //      let hit_result = intersect_sphere2( r, objects.spheres[i], 0.0, 2000.0 );
+    //    if ( hit_result.t > 0.0 ) {
+      //      return hit_sphere( r, hit_result );
+//        }        
+    //}
 
     return miss(r);
 }
@@ -209,7 +216,18 @@ fn update([[builtin(global_invocation_id)]] invocation_id: vec3<u32>)
         let dir = lower_left_corner + u*horiz + v*vert;
 
         let r = ray( origin, dir );
-        color = color + intersect_world(r);
+        let hit_result = intersect_world(r);
+
+        color = color + hit_result.c;
+
+        if ( hit_result.can_extend ) {
+            r = hit_result.extend;
+            hit_result = intersect_world(r);
+
+            // add shade ...
+        }
+
+        //color = color + intersect_world(r);
     }
     color = color / f32(samples);
 
