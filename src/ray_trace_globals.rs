@@ -1,7 +1,6 @@
 use bevy::{
     prelude::*,
     render::{
-        render_asset::RenderAssets,
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
         RenderApp, RenderStage,
@@ -9,7 +8,6 @@ use bevy::{
 };
 
 use crate::ray_trace_pipeline::RayTracePipeline;
-use crate::RenderTargetImage;
 use crate::RENDER_TARGET_SIZE;
 
 pub struct GlobalsBindGroup(pub BindGroup);
@@ -72,9 +70,7 @@ fn prepare_globals(
 fn queue_globals(
     mut commands: Commands,
     pipeline: Res<RayTracePipeline>,
-    gpu_images: Res<RenderAssets<Image>>,
     globals: Res<GlobalsGPUStorage>,
-    render_target: Res<RenderTargetImage>,
     render_device: Res<RenderDevice>,
 ) {
     let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
@@ -87,6 +83,22 @@ fn queue_globals(
     });
 
     commands.insert_resource(GlobalsBindGroup(bind_group));
+}
+
+pub fn describe_globals<'a>() -> BindGroupLayoutDescriptor<'a> {
+    BindGroupLayoutDescriptor {
+        label: Some("globals"),
+        entries: &[BindGroupLayoutEntry {
+            binding: 0,
+            count: None,
+            visibility: ShaderStages::COMPUTE,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: false },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+        }],
+    }
 }
 
 fn prepare_ray_buf(
@@ -105,23 +117,28 @@ fn prepare_ray_buf(
             .buffer
             .get_mut()
             .rays
-            .append(&mut Vec::with_capacity(ray_count));
+            .append(&mut vec![RayGPU::default(); ray_count]);
+        //.append(&mut Vec::with_capacity(ray_count));
 
         ray_buf.buffer.write_buffer(&render_device, &render_queue);
+
+        println!(
+            "Ray Buffer: {:?} {:?}",
+            ray_count,
+            ray_buf.buffer.get().rays.size()
+        );
     }
 }
 
 fn queue_ray_buf(
     mut commands: Commands,
     pipeline: Res<RayTracePipeline>,
-    gpu_images: Res<RenderAssets<Image>>,
     ray_buf: Res<RayBufGPUStorage>,
-    render_target: Res<RenderTargetImage>,
     render_device: Res<RenderDevice>,
 ) {
     let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
         label: None,
-        layout: &pipeline.bind_groups.ray_buffer,
+        layout: &pipeline.bind_groups.rays,
         entries: &[BindGroupEntry {
             binding: 0,
             resource: ray_buf.buffer.binding().unwrap(),
@@ -129,4 +146,20 @@ fn queue_ray_buf(
     });
 
     commands.insert_resource(RayBufBindGroup(bind_group));
+}
+
+pub fn describe_rays<'a>() -> BindGroupLayoutDescriptor<'a> {
+    BindGroupLayoutDescriptor {
+        label: Some("rays"),
+        entries: &[BindGroupLayoutEntry {
+            binding: 0,
+            count: None,
+            visibility: ShaderStages::COMPUTE,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: false },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+        }],
+    }
 }

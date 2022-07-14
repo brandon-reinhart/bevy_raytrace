@@ -55,14 +55,14 @@ impl Plugin for SphereRenderPlugin {
             render_app
                 .insert_resource(ObjectListGPU::default())
                 .insert_resource(ObjectListStorage::default())
-                .add_system_to_stage(RenderStage::Extract, extract_spheres)
-                .add_system_to_stage(RenderStage::Prepare, prepare_spheres)
-                .add_system_to_stage(RenderStage::Queue, queue_spheres);
+                .add_system_to_stage(RenderStage::Extract, extract)
+                .add_system_to_stage(RenderStage::Prepare, prepare)
+                .add_system_to_stage(RenderStage::Queue, queue);
         }
     }
 }
 
-fn extract_spheres(mut world: ResMut<MainWorld>, mut object_list: ResMut<ObjectListGPU>) {
+fn extract(mut world: ResMut<MainWorld>, mut object_list: ResMut<ObjectListGPU>) {
     let mut query = world.query::<(&Sphere, &Transform)>();
 
     object_list.spheres.clear();
@@ -75,7 +75,7 @@ fn extract_spheres(mut world: ResMut<MainWorld>, mut object_list: ResMut<ObjectL
     }
 }
 
-fn prepare_spheres(
+fn prepare(
     mut object_list: ResMut<ObjectListGPU>,
     mut object_list_storage: ResMut<ObjectListStorage>,
     render_queue: Res<RenderQueue>,
@@ -94,22 +94,36 @@ fn prepare_spheres(
         .write_buffer(&render_device, &render_queue);
 }
 
-fn queue_spheres(
+fn queue(
     mut commands: Commands,
-    object_list_storage: Res<ObjectListStorage>,
+    object_list: Res<ObjectListStorage>,
     pipeline: Res<RayTracePipeline>,
     render_device: Res<RenderDevice>,
 ) {
-    /*
     let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
         label: None,
-        layout: &pipeline.shapes_bind_group_layout,
+        layout: &pipeline.bind_groups.objects,
         entries: &[BindGroupEntry {
             binding: 0,
-            resource: object_list_storage.buffer.binding().unwrap(),
+            resource: object_list.buffer.binding().unwrap(),
         }],
     });
 
     commands.insert_resource(ShapesBindGroup(bind_group));
-    */
+}
+
+pub fn describe<'a>() -> BindGroupLayoutDescriptor<'a> {
+    BindGroupLayoutDescriptor {
+        label: Some("objects"),
+        entries: &[BindGroupLayoutEntry {
+            binding: 0,
+            visibility: ShaderStages::COMPUTE,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    }
 }

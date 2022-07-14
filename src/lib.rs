@@ -1,9 +1,11 @@
 mod camera;
 mod plugin;
-mod sphere;
-mod ray_trace_pipeline;
-mod ray_trace_node;
+mod ray_trace_camera;
 mod ray_trace_globals;
+mod ray_trace_intersection;
+mod ray_trace_node;
+mod ray_trace_pipeline;
+mod sphere;
 
 use bevy::{
     prelude::*,
@@ -29,15 +31,12 @@ pub fn entry() {
         })
         .insert_resource(ClearColor(Color::rgba(0.35, 0.35, 0.35, 1.0)))
         .add_plugins(DefaultPlugins)
-        .add_plugin(CameraPlugin)
-        .add_plugin(RayTracePlugin)
-        .add_plugin(SphereRenderPlugin)
-        //.add_plugin(ExtractComponentPlugin::<sphere::Sphere>::default())
-        //.add_pluign(UniformComponentPlugin::<sphere::Sphere>::default())
+        //.add_plugin(CameraPlugin)
+        //.add_plugin(RayTracePlugin)
+        //.add_plugin(SphereRenderPlugin)
         .add_startup_system(init_camera)
-        .add_startup_system(init_render_target)
-        //        .add_startup_system(sphere::init_spheres)
-        .add_system(on_window_resized)
+        //.add_startup_system(init_render_target)
+        //.add_system(on_window_resized)
         .run();
 }
 
@@ -89,7 +88,7 @@ fn init_render_target(mut commands: Commands, mut images: ResMut<Assets<Image>>)
         })
         .insert(RenderTarget);
 
-    commands.insert_resource(RenderTargetImage(image));
+    //commands.insert_resource(RenderTargetImage(image));
 }
 
 fn on_window_resized(

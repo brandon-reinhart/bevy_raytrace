@@ -1,0 +1,107 @@
+use crate::ray_trace_pipeline::RayTracePipeline;
+use crate::RENDER_TARGET_SIZE;
+use bevy::{
+    prelude::*,
+    render::{
+        render_resource::*,
+        renderer::{RenderDevice, RenderQueue},
+        RenderApp, RenderStage,
+    },
+};
+
+pub struct IntersectionBindGroup(pub BindGroup);
+
+#[derive(ShaderType, Clone, Default, Debug)]
+pub struct IntersectionGPU {
+    t: f32,
+    point: Vec3,
+    normal: Vec3,
+}
+
+#[derive(ShaderType, Clone, Default, Debug)]
+pub struct IntersectionBufGPU {
+    pub intersection_count: u32,
+    #[size(runtime)]
+    pub intersections: Vec<IntersectionGPU>,
+}
+
+#[derive(Default)]
+struct IntersectionGPUStorage {
+    pub buffer: StorageBuffer<IntersectionBufGPU>,
+}
+
+pub struct RayTraceIntersectionsPlugin;
+
+impl Plugin for RayTraceIntersectionsPlugin {
+    fn build(&self, app: &mut App) {
+        let render_app = app.sub_app_mut(RenderApp);
+        render_app
+            .init_resource::<IntersectionGPUStorage>()
+            .add_system_to_stage(RenderStage::Prepare, prepare)
+            .add_system_to_stage(RenderStage::Queue, queue);
+    }
+}
+
+fn prepare(
+    mut intersections: ResMut<IntersectionGPUStorage>,
+    render_queue: Res<RenderQueue>,
+    render_device: Res<RenderDevice>,
+) {
+    // Allocate as many intersections as we have rays.
+    let ray_count = (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1) as usize;
+
+    if intersections.buffer.get().intersections.len() != ray_count {
+        intersections.buffer.get_mut().intersection_count = ray_count as u32;
+        intersections.buffer.get_mut().intersections.clear();
+        intersections
+            .buffer
+            .get_mut()
+            .intersections
+            .append(&mut vec![IntersectionGPU::default(); ray_count]);
+        //            .append(&mut Vec::with_capacity(ray_count));
+
+        intersections
+            .buffer
+            .write_buffer(&render_device, &render_queue);
+
+        println!(
+            "Intersection Buffer: {:?} {:?}",
+            ray_count,
+            intersections.buffer.get().intersections.size()
+        );
+    }
+}
+
+fn queue(
+    mut commands: Commands,
+    pipeline: Res<RayTracePipeline>,
+    intersections: Res<IntersectionGPUStorage>,
+    render_device: Res<RenderDevice>,
+) {
+    let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
+        label: None,
+        layout: &pipeline.bind_groups.intersection,
+        entries: &[BindGroupEntry {
+            binding: 0,
+            resource: intersections.buffer.binding().unwrap(),
+        }],
+    });
+
+    commands.insert_resource(IntersectionBindGroup(bind_group));
+}
+
+pub fn describe<'a>() -> BindGroupLayoutDescriptor<'a> {
+    BindGroupLayoutDescriptor {
+        label: Some("intersections"),
+        entries: &[BindGroupLayoutEntry {
+            binding: 0,
+            count: None,
+            visibility: ShaderStages::COMPUTE,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: false },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+        }],
+    }
+}

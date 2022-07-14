@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 bevy = { git = "https://github.com/bevyengine/bevy.git?rev=8eb0440f1ed0f075ed488e7efa36ba0f8bb37cad" }
-iyes_loopless = { git = "https://github.com/IyesGames/iyes_loopless.git?branch=bevy_main" }
+#iyes_loopless = { git = "https://github.com/IyesGames/iyes_loopless.git?branch=bevy_main" }
