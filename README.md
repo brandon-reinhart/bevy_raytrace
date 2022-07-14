@@ -10,6 +10,7 @@ Tasks:
 - [ ] shadow rays
 - [ ] depth of field
 - [ ] wavefront loop
+- [ ] resize
 - [ ] add surface primitive
 - [ ] rapier on objects so they can roll around
 
