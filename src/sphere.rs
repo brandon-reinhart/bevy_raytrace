@@ -101,7 +101,7 @@ fn queue(
     render_device: Res<RenderDevice>,
 ) {
     let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-        label: None,
+        label: Some("objects_bind_group"),
         layout: &pipeline.bind_groups.objects,
         entries: &[BindGroupEntry {
             binding: 0,
@@ -114,7 +114,7 @@ fn queue(
 
 pub fn describe<'a>() -> BindGroupLayoutDescriptor<'a> {
     BindGroupLayoutDescriptor {
-        label: Some("objects"),
+        label: Some("objects_layout_descriptor"),
         entries: &[BindGroupLayoutEntry {
             binding: 0,
             visibility: ShaderStages::COMPUTE,

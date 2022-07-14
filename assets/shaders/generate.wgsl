@@ -12,6 +12,7 @@ struct camera_config {
 struct ray {
     origin: vec3<f32>;
     dir: vec3<f32>;
+    pixel: u32;
 };
 
 struct ray_buf {
@@ -26,10 +27,10 @@ struct globals_buf {
 [[group(0), binding(0)]]
 var<uniform> camera: camera_config;
 
-[[group(1), binding(0)]]
+[[group(0), binding(1)]]
 var<storage, read_write> globals: globals_buf;
 
-[[group(2), binding(0)]]
+[[group(1), binding(0)]]
 var<storage, read_write> ray_buffer: ray_buf;
 
 //"Xorshift RNGs" by George Marsaglia
@@ -63,8 +64,8 @@ fn main([[builtin(global_invocation_id)]] invocation_id: vec3<u32>)
         return;
     }
 
-    let x = invocation_id.x;
-    let y = invocation_id.y;
+    let x = index % camera.render_width;
+    let y = (index / camera.render_width) % camera.render_height;
 
     // What is the origin of these bit masks?
     // todo: What is a standard way of generated a random seed?
@@ -73,21 +74,22 @@ fn main([[builtin(global_invocation_id)]] invocation_id: vec3<u32>)
     // Get a stratified point inside the pixel?
     // todo: Read about good techniques for determining the ray.
     // For now, a simple (bad) approach:
-    let x = f32(x) + random_float2(seed);
-    let y = f32(y) + random_float2(seed);
+    let x = f32(x);// + random_float2(seed);
+    let y = f32(y);// + random_float2(seed);
 
-    let u = x / f32(camera.render_width);
-    let v = y / f32(camera.render_height);
+	let normalized_i = ( x / f32(camera.render_width) ) - 0.5;
+    let normalized_j = ( ( f32(camera.render_height) - y ) / f32(camera.render_height) ) - 0.5;
 
-    let horiz = vec3<f32>(4.0, 0.0, 0.0);
-    let vert = vec3<f32>(0.0, -2.0, 0.0);
-    let lower_left_corner = vec3<f32>(-2.0, 1.0, -1.0);
+    var dir_to_focal_plane = camera.camera_forward + normalized_i * camera.camera_right + normalized_j * camera.camera_up;
+    dir_to_focal_plane = normalize( dir_to_focal_plane );
+    let convergence_point = camera.camera_position + dir_to_focal_plane;
 
-    let origin = vec3<f32>(0.0, 0.0, 0.0);
-    let dir = lower_left_corner + u*horiz + v*vert;
+    let origin = camera.camera_position;// + camera.camera_right * lens.x + camera.camera_up * lens.y;
+    let direction = normalize( convergence_point - origin );
 
-    let r = ray( origin, dir );
+    let pixel = u32( y * f32(camera.render_width) + x );
+    var r = ray( origin, direction, pixel );
 
-    //storageBarrier();
+    storageBarrier();
     ray_buffer.rays[index] = r;
 }

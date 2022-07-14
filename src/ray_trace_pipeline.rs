@@ -5,17 +5,17 @@ use bevy::{
 use std::borrow::Cow;
 
 pub struct RayTraceBindGroups {
-    pub camera: BindGroupLayout,
-    pub globals: BindGroupLayout,
-    pub rays: BindGroupLayout,
-    pub intersection: BindGroupLayout,
+    pub camera_globals: BindGroupLayout,
+    pub rays_intersections: BindGroupLayout,
     pub objects: BindGroupLayout,
+    pub materials: BindGroupLayout,
+    pub output: BindGroupLayout,
 }
 
 pub struct RayTracePipelines {
     pub generate: CachedComputePipelineId,
-    pub extend: CachedComputePipelineId,
-    // shade: CachedComputePipelineId,
+    pub intersect: CachedComputePipelineId,
+    pub shade: CachedComputePipelineId,
     // connect: CachedComputePipelineId,
 }
 
@@ -28,7 +28,8 @@ impl RayTracePipeline {
     fn create_pipelines(world: &mut World, bind_groups: &RayTraceBindGroups) -> RayTracePipelines {
         RayTracePipelines {
             generate: RayTracePipeline::create_generate_pipeline(world, bind_groups),
-            extend: RayTracePipeline::create_extend_pipeline(world, bind_groups),
+            intersect: RayTracePipeline::create_intersect_pipeline(world, bind_groups),
+            shade: RayTracePipeline::create_shade_pipeline(world, bind_groups),
         }
     }
 
@@ -43,11 +44,10 @@ impl RayTracePipeline {
         let mut pipeline_cache = world.resource_mut::<PipelineCache>();
 
         pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
-            label: None,
+            label: Some(Cow::from("generate")),
             layout: Some(vec![
-                bind_groups.camera.clone(),
-                bind_groups.globals.clone(),
-                bind_groups.rays.clone(),
+                bind_groups.camera_globals.clone(),
+                bind_groups.rays_intersections.clone(),
             ]),
             shader,
             shader_defs: vec![],
@@ -55,21 +55,44 @@ impl RayTracePipeline {
         })
     }
 
-    fn create_extend_pipeline(
+    fn create_intersect_pipeline(
         world: &mut World,
         bind_groups: &RayTraceBindGroups,
     ) -> CachedComputePipelineId {
-        let shader = world.resource::<AssetServer>().load("shaders/extend.wgsl");
+        let shader = world
+            .resource::<AssetServer>()
+            .load("shaders/intersect.wgsl");
 
         let mut pipeline_cache = world.resource_mut::<PipelineCache>();
 
         pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
-            label: None,
+            label: Some(Cow::from("intersect")),
             layout: Some(vec![
-                bind_groups.globals.clone(),
-                bind_groups.rays.clone(),
-                bind_groups.intersection.clone(),
+                bind_groups.camera_globals.clone(),
+                bind_groups.rays_intersections.clone(),
                 bind_groups.objects.clone(),
+            ]),
+            shader,
+            shader_defs: vec![],
+            entry_point: Cow::from("main"),
+        })
+    }
+
+    fn create_shade_pipeline(
+        world: &mut World,
+        bind_groups: &RayTraceBindGroups,
+    ) -> CachedComputePipelineId {
+        let shader = world.resource::<AssetServer>().load("shaders/shade.wgsl");
+
+        let mut pipeline_cache = world.resource_mut::<PipelineCache>();
+
+        pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
+            label: Some(Cow::from("shade")),
+            layout: Some(vec![
+                bind_groups.camera_globals.clone(),
+                bind_groups.rays_intersections.clone(),
+                //bind_groups.materials.clone(),
+                bind_groups.output.clone(),
             ]),
             shader,
             shader_defs: vec![],
@@ -83,18 +106,30 @@ impl FromWorld for RayTracePipeline {
         let render_device = world.resource::<RenderDevice>();
 
         let bind_groups = RayTraceBindGroups {
-            camera: render_device.create_bind_group_layout(&crate::ray_trace_camera::describe()),
+            camera_globals: render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("camera_globals_layout_descriptor"),
+                entries: &[
+                    crate::ray_trace_camera::describe(0),
+                    crate::ray_trace_globals::describe(1),
+                ],
+            }),
 
-            globals: render_device
-                .create_bind_group_layout(&crate::ray_trace_globals::describe_globals()),
-
-            rays: render_device
-                .create_bind_group_layout(&crate::ray_trace_globals::describe_rays()),
-
-            intersection: render_device
-                .create_bind_group_layout(&crate::ray_trace_intersection::describe()),
+            rays_intersections: render_device.create_bind_group_layout(
+                &BindGroupLayoutDescriptor {
+                    label: Some("rays_intersections_layout_descriptor"),
+                    entries: &[
+                        crate::ray_trace_rays::describe(0),
+                        crate::ray_trace_intersection::describe(1),
+                    ],
+                },
+            ),
 
             objects: render_device.create_bind_group_layout(&crate::sphere::describe()),
+
+            materials: render_device
+                .create_bind_group_layout(&crate::ray_trace_materials::describe()),
+
+            output: render_device.create_bind_group_layout(&crate::ray_trace_output::describe()),
         };
 
         let pipelines = RayTracePipeline::create_pipelines(world, &bind_groups);
@@ -105,35 +140,3 @@ impl FromWorld for RayTracePipeline {
         }
     }
 }
-
-/*
-        let texture_bind_group_layout =
-            world
-                .resource::<RenderDevice>()
-                .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                    label: None,
-                    entries: &[
-                        BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: ShaderStages::COMPUTE,
-                            ty: BindingType::StorageTexture {
-                                access: StorageTextureAccess::ReadWrite,
-                                format: TextureFormat::Rgba32Float,
-                                view_dimension: TextureViewDimension::D2,
-                            },
-                            count: None,
-                        },
-                        BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: ShaderStages::COMPUTE,
-                            ty: BindingType::Buffer {
-                                ty: BufferBindingType::Uniform,
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                    ],
-                });
-
-*/

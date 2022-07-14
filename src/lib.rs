@@ -3,14 +3,17 @@ mod plugin;
 mod ray_trace_camera;
 mod ray_trace_globals;
 mod ray_trace_intersection;
+mod ray_trace_materials;
 mod ray_trace_node;
+mod ray_trace_output;
 mod ray_trace_pipeline;
+mod ray_trace_rays;
 mod sphere;
 
 use bevy::{
+    diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     prelude::*,
-    render::{extract_resource::ExtractResource, render_resource::*},
-    window::{WindowDescriptor, WindowResized},
+    window::WindowDescriptor,
 };
 
 use camera::CameraPlugin;
@@ -19,24 +22,23 @@ use sphere::SphereRenderPlugin;
 
 pub const RENDER_TARGET_SIZE: (u32, u32) = (1024, 1024);
 
-#[derive(Component)]
-pub struct RenderTarget;
-
 pub fn entry() {
     App::new()
         .insert_resource(WindowDescriptor {
             title: "bevy_raytrace".to_string(),
+            width: RENDER_TARGET_SIZE.0 as f32,
+            height: RENDER_TARGET_SIZE.1 as f32,
             resizable: true,
             ..default()
         })
         .insert_resource(ClearColor(Color::rgba(0.35, 0.35, 0.35, 1.0)))
         .add_plugins(DefaultPlugins)
-        //.add_plugin(CameraPlugin)
-        //.add_plugin(RayTracePlugin)
-        //.add_plugin(SphereRenderPlugin)
+        .add_plugin(LogDiagnosticsPlugin::default())
+        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        .add_plugin(CameraPlugin)
+        .add_plugin(RayTracePlugin)
+        .add_plugin(SphereRenderPlugin)
         .add_startup_system(init_camera)
-        //.add_startup_system(init_render_target)
-        //.add_system(on_window_resized)
         .run();
 }
 
@@ -45,68 +47,3 @@ pub fn init_camera(mut commands: Commands) {
     // This will never move and is not the ray trace camera.
     commands.spawn_bundle(Camera2dBundle::default());
 }
-
-fn vf_to_u8(v: &[f32]) -> &[u8] {
-    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 4) }
-}
-
-fn init_render_target(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
-    // Create an image of the size of the screen and attach it to a sprite with the same size.
-    // This will become the render target for the compute pipeline.
-    // todo: resize the render target and sprite when the screen is resized.
-
-    let fill = vec![0f32, 0f32, 0f32, 1f32];
-    let fill = vf_to_u8(&fill[..]);
-
-    let mut image = Image::new_fill(
-        Extent3d {
-            width: RENDER_TARGET_SIZE.0,
-            height: RENDER_TARGET_SIZE.1,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        fill,
-        TextureFormat::Rgba32Float,
-    );
-
-    image.texture_descriptor.usage =
-        TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
-
-    let image = images.add(image);
-
-    commands
-        .spawn_bundle(SpriteBundle {
-            sprite: Sprite {
-                custom_size: Some(Vec2::new(
-                    RENDER_TARGET_SIZE.0 as f32,
-                    RENDER_TARGET_SIZE.1 as f32,
-                )),
-                ..default()
-            },
-            texture: image.clone(),
-            ..default()
-        })
-        .insert(RenderTarget);
-
-    //commands.insert_resource(RenderTargetImage(image));
-}
-
-fn on_window_resized(
-    mut event: EventReader<WindowResized>,
-    mut query: Query<&mut Sprite, With<RenderTarget>>,
-) {
-    if event.is_empty() || query.is_empty() {
-        return;
-    }
-
-    // Resize the sprite to fit the window.
-    for e in event.iter() {
-        let mut sprite = query.single_mut();
-        sprite.custom_size = Some(Vec2::new(e.width, e.height));
-    }
-
-    // Also need to resize the render target to some aspect ratio of the sprite size...
-}
-
-#[derive(Clone, Deref, ExtractResource)]
-pub struct RenderTargetImage(Handle<Image>);

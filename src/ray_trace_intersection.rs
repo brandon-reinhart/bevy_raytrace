@@ -26,7 +26,7 @@ pub struct IntersectionBufGPU {
 }
 
 #[derive(Default)]
-struct IntersectionGPUStorage {
+pub struct IntersectionGPUStorage {
     pub buffer: StorageBuffer<IntersectionBufGPU>,
 }
 
@@ -37,8 +37,7 @@ impl Plugin for RayTraceIntersectionsPlugin {
         let render_app = app.sub_app_mut(RenderApp);
         render_app
             .init_resource::<IntersectionGPUStorage>()
-            .add_system_to_stage(RenderStage::Prepare, prepare)
-            .add_system_to_stage(RenderStage::Queue, queue);
+            .add_system_to_stage(RenderStage::Prepare, prepare);
     }
 }
 
@@ -58,7 +57,6 @@ fn prepare(
             .get_mut()
             .intersections
             .append(&mut vec![IntersectionGPU::default(); ray_count]);
-        //            .append(&mut Vec::with_capacity(ray_count));
 
         intersections
             .buffer
@@ -72,36 +70,15 @@ fn prepare(
     }
 }
 
-fn queue(
-    mut commands: Commands,
-    pipeline: Res<RayTracePipeline>,
-    intersections: Res<IntersectionGPUStorage>,
-    render_device: Res<RenderDevice>,
-) {
-    let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-        label: None,
-        layout: &pipeline.bind_groups.intersection,
-        entries: &[BindGroupEntry {
-            binding: 0,
-            resource: intersections.buffer.binding().unwrap(),
-        }],
-    });
-
-    commands.insert_resource(IntersectionBindGroup(bind_group));
-}
-
-pub fn describe<'a>() -> BindGroupLayoutDescriptor<'a> {
-    BindGroupLayoutDescriptor {
-        label: Some("intersections"),
-        entries: &[BindGroupLayoutEntry {
-            binding: 0,
-            count: None,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: false },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-        }],
+pub fn describe(binding: u32) -> BindGroupLayoutEntry {
+    BindGroupLayoutEntry {
+        binding,
+        count: None,
+        visibility: ShaderStages::COMPUTE,
+        ty: BindingType::Buffer {
+            ty: BufferBindingType::Storage { read_only: false },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
     }
 }

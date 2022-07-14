@@ -2,7 +2,6 @@ use bevy::{
     math::Vec3Swizzles,
     prelude::*,
     render::{
-        render_asset::RenderAssets,
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
         RenderApp, RenderStage,
@@ -14,7 +13,7 @@ use crate::ray_trace_pipeline::RayTracePipeline;
 
 use crate::RENDER_TARGET_SIZE;
 
-pub struct CameraBindGroup(pub BindGroup);
+//pub struct CameraBindGroup(pub BindGroup);
 
 #[derive(Copy, Clone, Debug, ShaderType)]
 pub struct CameraGPU {
@@ -40,8 +39,7 @@ impl Plugin for RayTraceCameraPlugin {
         let render_app = app.sub_app_mut(RenderApp);
         render_app
             .init_resource::<CameraGPUStorage>()
-            .add_system_to_stage(RenderStage::Prepare, prepare)
-            .add_system_to_stage(RenderStage::Queue, queue);
+            .add_system_to_stage(RenderStage::Prepare, prepare);
     }
 }
 
@@ -73,36 +71,15 @@ fn prepare(
         .write_buffer(&render_device, &render_queue);
 }
 
-fn queue(
-    mut commands: Commands,
-    pipeline: Res<RayTracePipeline>,
-    camera: Res<CameraGPUStorage>,
-    render_device: Res<RenderDevice>,
-) {
-    let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-        label: None,
-        layout: &pipeline.bind_groups.camera,
-        entries: &[BindGroupEntry {
-            binding: 0,
-            resource: camera.buffer.binding().unwrap(),
-        }],
-    });
-
-    commands.insert_resource(CameraBindGroup(bind_group));
-}
-
-pub fn describe<'a>() -> BindGroupLayoutDescriptor<'a> {
-    BindGroupLayoutDescriptor {
-        label: Some("camera"),
-        entries: &[BindGroupLayoutEntry {
-            binding: 0,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }],
+pub fn describe(binding: u32) -> BindGroupLayoutEntry {
+    BindGroupLayoutEntry {
+        binding,
+        visibility: ShaderStages::COMPUTE,
+        ty: BindingType::Buffer {
+            ty: BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
     }
 }
