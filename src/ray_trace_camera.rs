@@ -9,7 +9,6 @@ use bevy::{
 };
 
 use crate::camera::RayTraceCamera;
-use crate::ray_trace_pipeline::RayTracePipeline;
 
 use crate::RENDER_TARGET_SIZE;
 

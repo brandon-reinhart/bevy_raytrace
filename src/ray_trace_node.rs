@@ -8,11 +8,8 @@ use bevy::{
 };
 
 use crate::plugin::{CameraGlobalsBindGroup, RaysIntersectionsBindGroup};
-use crate::ray_trace_intersection::IntersectionBindGroup;
-use crate::ray_trace_materials::MaterialsBindGroup;
 use crate::ray_trace_output::OutputImageBindGroup;
 use crate::ray_trace_pipeline::*;
-use crate::ray_trace_rays::RayBufBindGroup;
 use crate::sphere::ShapesBindGroup;
 
 const WORKGROUP_SIZE: u32 = 128;
@@ -81,7 +78,7 @@ impl RayTraceNode {
 
         let camera_globals = &world.resource::<CameraGlobalsBindGroup>().0;
         let rays_intersections = &world.resource::<RaysIntersectionsBindGroup>().0;
-        let materials = &world.resource::<MaterialsBindGroup>().0;
+        //let materials = &world.resource::<MaterialsBindGroup>().0;
         let output = &world.resource::<OutputImageBindGroup>().0;
 
         let pipeline_cache = world.resource::<PipelineCache>();

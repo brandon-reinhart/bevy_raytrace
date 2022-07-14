@@ -7,10 +7,7 @@ use bevy::{
     },
 };
 
-use crate::ray_trace_pipeline::RayTracePipeline;
 use crate::RENDER_TARGET_SIZE;
-
-pub struct RayBufBindGroup(pub BindGroup);
 
 #[derive(ShaderType, Clone, Default, Debug)]
 pub struct RayGPU {

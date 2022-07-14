@@ -7,10 +7,6 @@ use bevy::{
     },
 };
 
-use crate::ray_trace_pipeline::RayTracePipeline;
-
-//pub struct GlobalsBindGroup(pub BindGroup);
-
 #[derive(ShaderType, Clone, Default, Debug)]
 pub struct GlobalsGPU {
     pub ray_index: u32,
