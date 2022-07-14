@@ -3,6 +3,7 @@
 A toy wavefront ray tracer using Bevy. Just for learning.
 
 Tasks:
+- [x] wavefront (generate -> intersect -> shade)
 - [ ] stochastic primary rays
 - [ ] material response
 - [ ] extension rays
