@@ -13,6 +13,7 @@ pub struct IntersectionGPU {
     t: f32,
     point: Vec3,
     normal: Vec3,
+    material: u32,
 }
 
 #[derive(ShaderType, Clone, Default, Debug)]

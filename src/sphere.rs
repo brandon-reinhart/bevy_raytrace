@@ -1,4 +1,4 @@
-use crate::ray_trace_pipeline::RayTracePipeline;
+use crate::ray_trace_materials::MaterialCache;
 use bevy::{
     prelude::*,
     render::{
@@ -12,37 +12,59 @@ use bevy::{
 struct SphereGPU {
     center: Vec3,
     radius: f32,
+    material: u32,
 }
 
 #[derive(ShaderType, Clone, Default, Debug)]
-struct ObjectListGPU {
+pub struct ObjectListGPU {
     sphere_count: u32,
     #[size(runtime)]
     spheres: Vec<SphereGPU>,
 }
 
 #[derive(Default)]
-struct ObjectListStorage {
+pub struct ObjectListStorage {
     pub buffer: StorageBuffer<ObjectListGPU>,
 }
 
 #[derive(Component, Default, Clone, Debug)]
 pub struct Sphere {
     radius: f32,
+    material: u32,
 }
 
-pub struct ShapesBindGroup(pub BindGroup);
+pub fn init_spheres(mut commands: Commands, materials: Res<MaterialCache>) {
+    /*     commands
+    .spawn()
+    .insert(Transform::from_xyz(0.0, -100.5, -1.0))
+    .insert(Sphere {
+        radius: 100.0,
+        material: materials.get_index_of("ground"),
+    });*/
 
-pub fn init_spheres(mut commands: Commands) {
     commands
         .spawn()
         .insert(Transform::from_xyz(0.0, 0.0, -1.0))
-        .insert(Sphere { radius: 0.5 });
+        .insert(Sphere {
+            radius: 0.5,
+            material: materials.get_index_of("center"),
+        });
 
     commands
         .spawn()
-        .insert(Transform::from_xyz(0.0, -100.5, -1.0))
-        .insert(Sphere { radius: 100.0 });
+        .insert(Transform::from_xyz(-1.0, 0.0, -1.0))
+        .insert(Sphere {
+            radius: 0.5,
+            material: materials.get_index_of("left"),
+        });
+
+    commands
+        .spawn()
+        .insert(Transform::from_xyz(1.0, 0.0, -1.0))
+        .insert(Sphere {
+            radius: 0.5,
+            material: materials.get_index_of("right"),
+        });
 }
 
 pub struct SphereRenderPlugin;
@@ -56,8 +78,7 @@ impl Plugin for SphereRenderPlugin {
                 .insert_resource(ObjectListGPU::default())
                 .insert_resource(ObjectListStorage::default())
                 .add_system_to_stage(RenderStage::Extract, extract)
-                .add_system_to_stage(RenderStage::Prepare, prepare)
-                .add_system_to_stage(RenderStage::Queue, queue);
+                .add_system_to_stage(RenderStage::Prepare, prepare);
         }
     }
 }
@@ -71,6 +92,7 @@ fn extract(mut world: ResMut<MainWorld>, mut object_list: ResMut<ObjectListGPU>)
         object_list.spheres.push(SphereGPU {
             center: transform.translation,
             radius: sphere.radius,
+            material: sphere.material,
         });
     }
 }
@@ -94,36 +116,15 @@ fn prepare(
         .write_buffer(&render_device, &render_queue);
 }
 
-fn queue(
-    mut commands: Commands,
-    object_list: Res<ObjectListStorage>,
-    pipeline: Res<RayTracePipeline>,
-    render_device: Res<RenderDevice>,
-) {
-    let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-        label: Some("objects_bind_group"),
-        layout: &pipeline.bind_groups.objects,
-        entries: &[BindGroupEntry {
-            binding: 0,
-            resource: object_list.buffer.binding().unwrap(),
-        }],
-    });
-
-    commands.insert_resource(ShapesBindGroup(bind_group));
-}
-
-pub fn describe<'a>() -> BindGroupLayoutDescriptor<'a> {
-    BindGroupLayoutDescriptor {
-        label: Some("objects_layout_descriptor"),
-        entries: &[BindGroupLayoutEntry {
-            binding: 0,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }],
+pub fn describe(binding: u32) -> BindGroupLayoutEntry {
+    BindGroupLayoutEntry {
+        binding,
+        visibility: ShaderStages::COMPUTE,
+        ty: BindingType::Buffer {
+            ty: BufferBindingType::Storage { read_only: true },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
     }
 }

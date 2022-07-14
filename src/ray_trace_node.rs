@@ -7,10 +7,11 @@ use bevy::{
     },
 };
 
-use crate::plugin::{CameraGlobalsBindGroup, RaysIntersectionsBindGroup};
+use crate::plugin::{
+    CameraGlobalsBindGroup, ObjectsMaterialsBindGroup, RaysIntersectionsBindGroup,
+};
 use crate::ray_trace_output::OutputImageBindGroup;
 use crate::ray_trace_pipeline::*;
-use crate::sphere::ShapesBindGroup;
 
 const WORKGROUP_SIZE: u32 = 128;
 use crate::RENDER_TARGET_SIZE;
@@ -49,7 +50,7 @@ impl RayTraceNode {
             .get_compute_pipeline(pipeline.pipelines.generate)
             .unwrap();
         pass.set_pipeline(pipeline);
-        pass.dispatch(num_dispatch, 1, 1);
+        pass.dispatch_workgroups(num_dispatch, 1, 1);
     }
 
     fn intersect<'a>(&self, world: &'a World, pass: &mut ComputePass<'a>) {
@@ -57,20 +58,20 @@ impl RayTraceNode {
 
         let camera_globals = &world.resource::<CameraGlobalsBindGroup>().0;
         let rays_intersections = &world.resource::<RaysIntersectionsBindGroup>().0;
-        let objects = &world.resource::<ShapesBindGroup>().0;
+        let objects_materials = &world.resource::<ObjectsMaterialsBindGroup>().0;
 
         let pipeline_cache = world.resource::<PipelineCache>();
         let pipeline = world.resource::<RayTracePipeline>();
 
         pass.set_bind_group(0, camera_globals, &[]);
         pass.set_bind_group(1, rays_intersections, &[]);
-        pass.set_bind_group(2, objects, &[]);
+        pass.set_bind_group(2, objects_materials, &[]);
 
         let pipeline = pipeline_cache
             .get_compute_pipeline(pipeline.pipelines.intersect)
             .unwrap();
         pass.set_pipeline(pipeline);
-        pass.dispatch(num_dispatch, 1, 1);
+        pass.dispatch_workgroups(num_dispatch, 1, 1);
     }
 
     fn shade<'a>(&self, world: &'a World, pass: &mut ComputePass<'a>) {
@@ -78,7 +79,7 @@ impl RayTraceNode {
 
         let camera_globals = &world.resource::<CameraGlobalsBindGroup>().0;
         let rays_intersections = &world.resource::<RaysIntersectionsBindGroup>().0;
-        //let materials = &world.resource::<MaterialsBindGroup>().0;
+        let objects_materials = &world.resource::<ObjectsMaterialsBindGroup>().0;
         let output = &world.resource::<OutputImageBindGroup>().0;
 
         let pipeline_cache = world.resource::<PipelineCache>();
@@ -86,15 +87,15 @@ impl RayTraceNode {
 
         pass.set_bind_group(0, camera_globals, &[]);
         pass.set_bind_group(1, rays_intersections, &[]);
-        //pass.set_bind_group(2, materials, &[]);
-        pass.set_bind_group(2, output, &[]);
+        pass.set_bind_group(2, objects_materials, &[]);
+        pass.set_bind_group(3, output, &[]);
         // also shadow rays
 
         let pipeline = pipeline_cache
             .get_compute_pipeline(pipeline.pipelines.shade)
             .unwrap();
         pass.set_pipeline(pipeline);
-        pass.dispatch(num_dispatch, 1, 1);
+        pass.dispatch_workgroups(num_dispatch, 1, 1);
     }
 }
 

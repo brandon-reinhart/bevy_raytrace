@@ -7,8 +7,7 @@ use std::borrow::Cow;
 pub struct RayTraceBindGroups {
     pub camera_globals: BindGroupLayout,
     pub rays_intersections: BindGroupLayout,
-    pub objects: BindGroupLayout,
-    pub materials: BindGroupLayout,
+    pub objects_materials: BindGroupLayout,
     pub output: BindGroupLayout,
 }
 
@@ -70,7 +69,7 @@ impl RayTracePipeline {
             layout: Some(vec![
                 bind_groups.camera_globals.clone(),
                 bind_groups.rays_intersections.clone(),
-                bind_groups.objects.clone(),
+                bind_groups.objects_materials.clone(),
             ]),
             shader,
             shader_defs: vec![],
@@ -91,7 +90,7 @@ impl RayTracePipeline {
             layout: Some(vec![
                 bind_groups.camera_globals.clone(),
                 bind_groups.rays_intersections.clone(),
-                //bind_groups.materials.clone(),
+                bind_groups.objects_materials.clone(),
                 bind_groups.output.clone(),
             ]),
             shader,
@@ -124,10 +123,13 @@ impl FromWorld for RayTracePipeline {
                 },
             ),
 
-            objects: render_device.create_bind_group_layout(&crate::sphere::describe()),
-
-            materials: render_device
-                .create_bind_group_layout(&crate::ray_trace_materials::describe()),
+            objects_materials: render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("objects_materials_layout_descriptor"),
+                entries: &[
+                    crate::sphere::describe(0),
+                    crate::ray_trace_materials::describe(1),
+                ],
+            }),
 
             output: render_device.create_bind_group_layout(&crate::ray_trace_output::describe()),
         };

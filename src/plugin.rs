@@ -9,17 +9,18 @@ use bevy::{
 use crate::ray_trace_camera::{CameraGPUStorage, RayTraceCameraPlugin};
 use crate::ray_trace_globals::{GlobalsGPUStorage, RayTraceGlobalsPlugin};
 use crate::ray_trace_intersection::{IntersectionGPUStorage, RayTraceIntersectionsPlugin};
-use crate::ray_trace_materials::RayTraceMaterialsPlugin;
+use crate::ray_trace_materials::{MaterialGPUStorage, RayTraceMaterialsPlugin};
 use crate::ray_trace_node::RayTraceNode;
 use crate::ray_trace_output::RayTraceOutputPlugin;
 use crate::ray_trace_pipeline::*;
 use crate::ray_trace_rays::{RayBufGPUStorage, RayTraceRaysPlugin};
+use crate::sphere::ObjectListStorage;
 
 pub struct RayTracePlugin;
 
 pub struct CameraGlobalsBindGroup(pub BindGroup);
-
 pub struct RaysIntersectionsBindGroup(pub BindGroup);
+pub struct ObjectsMaterialsBindGroup(pub BindGroup);
 
 impl Plugin for RayTracePlugin {
     fn build(&self, app: &mut App) {
@@ -34,7 +35,8 @@ impl Plugin for RayTracePlugin {
         render_app
             .init_resource::<RayTracePipeline>()
             .add_system_to_stage(RenderStage::Queue, queue_camera_globals)
-            .add_system_to_stage(RenderStage::Queue, queue_rays_intersections);
+            .add_system_to_stage(RenderStage::Queue, queue_rays_intersections)
+            .add_system_to_stage(RenderStage::Queue, queue_objects_materials);
 
         let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
         render_graph.add_node("raytrace", RayTraceNode::default());
@@ -92,4 +94,29 @@ fn queue_rays_intersections(
     });
 
     commands.insert_resource(RaysIntersectionsBindGroup(bind_group));
+}
+
+fn queue_objects_materials(
+    mut commands: Commands,
+    pipeline: Res<RayTracePipeline>,
+    objects: Res<ObjectListStorage>,
+    materials: Res<MaterialGPUStorage>,
+    render_device: Res<RenderDevice>,
+) {
+    let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
+        label: Some("objects_materials_bind_group"),
+        layout: &pipeline.bind_groups.objects_materials,
+        entries: &[
+            BindGroupEntry {
+                binding: 0,
+                resource: objects.buffer.binding().unwrap(),
+            },
+            BindGroupEntry {
+                binding: 1,
+                resource: materials.buffer.binding().unwrap(),
+            },
+        ],
+    });
+
+    commands.insert_resource(ObjectsMaterialsBindGroup(bind_group));
 }

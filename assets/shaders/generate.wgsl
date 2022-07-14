@@ -1,36 +1,36 @@
 struct camera_config {
-    frame: u32;
-    render_width: u32;
-    render_height: u32;
+    frame: u32,
+    render_width: u32,
+    render_height: u32,
 
-    camera_forward: vec3<f32>;
-    camera_up: vec3<f32>;
-    camera_right: vec3<f32>;
-    camera_position: vec3<f32>;
+    camera_forward: vec3<f32>,
+    camera_up: vec3<f32>,
+    camera_right: vec3<f32>,
+    camera_position: vec3<f32>,
 };
 
 struct ray {
-    origin: vec3<f32>;
-    dir: vec3<f32>;
-    pixel: u32;
+    origin: vec3<f32>,
+    dir: vec3<f32>,
+    pixel: u32,
 };
 
 struct ray_buf {
-    ray_count: u32;
-    rays: array<ray>;
+    ray_count: u32,
+    rays: array<ray>,
 };
 
 struct globals_buf {
-    ray_index: atomic<u32>;
+    ray_index: atomic<u32>,
 };
 
-[[group(0), binding(0)]]
+@group(0) @binding(0)
 var<uniform> camera: camera_config;
 
-[[group(0), binding(1)]]
+@group(0) @binding(1)
 var<storage, read_write> globals: globals_buf;
 
-[[group(1), binding(0)]]
+@group(1) @binding(0)
 var<storage, read_write> ray_buffer: ray_buf;
 
 //"Xorshift RNGs" by George Marsaglia
@@ -55,8 +55,8 @@ fn random_float2( seed: u32 ) -> f32
 	return f32(random_int( seed ) >> u32(16)) / f32(65535.0);
 }
 
-[[stage(compute), workgroup_size(128, 1, 1)]]
-fn main([[builtin(global_invocation_id)]] invocation_id: vec3<u32>)
+@compute @workgroup_size(128, 1, 1)
+fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
 {
     let index = atomicAdd( &globals.ray_index, u32(1) );
 
