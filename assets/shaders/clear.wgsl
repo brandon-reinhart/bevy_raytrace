@@ -50,7 +50,7 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
     let x = index % camera.render_width;
     let y = (index / camera.render_width) % camera.render_height;
 
-    let black = vec4<f32>( vec3<f32>( 0.0 ), 1.0 );
+    let black = vec4<f32>( vec3<f32>( 1.0 ), 1.0 );
 
     storageBarrier();
     textureStore(output, vec2<i32>(i32(x), i32(y)), black);

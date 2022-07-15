@@ -245,7 +245,7 @@ fn lambertian( r: ray, i: intersection, m: material, c: vec4<f32>, seed: u32 ) -
 
 
 
-    var destination =  i.position + i.normal + random_in_unit_sphere(seed);
+    var destination =  i.position + i.normal + random_in_unit_sphere(1u);
     //dir = normalize(dir);
     //random_in_sphere = normalize(random_in_sphere);
 
@@ -304,14 +304,14 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
 
     if ( i.t == VERY_FAR ) {
         var s = miss(r);
-        color = vec4<f32>( 0.5*color.xyz + 0.5*s.color.xyz, 1.0);
+        color = vec4<f32>( 0.5*color.xyz *s.color.xyz, 1.0);
 
         ray_buffer.rays[index] = s.extension;
     } else {
         let material = materials.m[i.material];
         //if ( material.reflectance == 0 ) {
             var s = lambertian(r, i, material, color, seed);
-            color = vec4<f32>(0.5 *color.xyz +  0.5*s.color.xyz, 1.0);
+            color = vec4<f32>(0.5 *color.xyz *s.color.xyz, 1.0);
             //color = vec4<f32>( color.xyz + vec3<f32>(0.0, 1.0, 0.0), 1.0);
 
 //            if ( materials.m[0].color.y == 1.0 ) {
