@@ -9,19 +9,23 @@ struct camera_config {
     camera_position: vec3<f32>,
 };
 
+struct globals_buf {
+    clear_index: atomic<u32>,
+    generate_index: atomic<u32>,
+    intersect_index: atomic<u32>,
+    shade_index: atomic<u32>,
+};
+
 struct ray {
     origin: vec3<f32>,
     dir: vec3<f32>,
     pixel: u32,
+    bounces: u32,
 };
 
 struct ray_buf {
     ray_count: u32,
     rays: array<ray>,
-};
-
-struct globals_buf {
-    ray_index: atomic<u32>,
 };
 
 @group(0) @binding(0)
@@ -58,8 +62,7 @@ fn random_float2( seed: u32 ) -> f32
 @compute @workgroup_size(128, 1, 1)
 fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
 {
-    let index = atomicAdd( &globals.ray_index, u32(1) );
-
+    let index = atomicAdd( &globals.generate_index, 1u );
     if ( index >= ray_buffer.ray_count ) {
         return;
     }
@@ -74,8 +77,8 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
     // Get a stratified point inside the pixel?
     // todo: Read about good techniques for determining the ray.
     // For now, a simple (bad) approach:
-    let x = f32(x);// + random_float2(seed);
-    let y = f32(y);// + random_float2(seed);
+    let x = f32(x);// + random_float2(seed) / 1000.0;
+    let y = f32(y);// + random_float2(seed) / 1000.0;
 
 	let normalized_i = ( x / f32(camera.render_width) ) - 0.5;
     let normalized_j = ( ( f32(camera.render_height) - y ) / f32(camera.render_height) ) - 0.5;
@@ -88,8 +91,8 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
     let direction = normalize( convergence_point - origin );
 
     let pixel = u32( y * f32(camera.render_width) + x );
-    var r = ray( origin, direction, pixel );
+    var r = ray( origin, direction, pixel, 0u );
 
     storageBarrier();
     ray_buffer.rays[index] = r;
-}
+}   

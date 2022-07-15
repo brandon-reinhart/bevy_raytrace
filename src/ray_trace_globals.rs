@@ -9,7 +9,20 @@ use bevy::{
 
 #[derive(ShaderType, Clone, Default, Debug)]
 pub struct GlobalsGPU {
-    pub ray_index: u32,
+    // Atomics
+    pub clear_index: u32,
+    pub generate_index: u32,
+    pub intersect_index: u32,
+    pub shade_index: u32,
+}
+
+impl GlobalsGPU {
+    fn reset(&mut self) {
+        self.clear_index = 0;
+        self.generate_index = 0;
+        self.intersect_index = 0;
+        self.shade_index = 0;
+    }
 }
 
 #[derive(Default)]
@@ -34,7 +47,7 @@ fn prepare(
     render_queue: Res<RenderQueue>,
     render_device: Res<RenderDevice>,
 ) {
-    globals.buffer.get_mut().ray_index = 0;
+    globals.buffer.get_mut().reset();
 
     globals.buffer.write_buffer(&render_device, &render_queue);
 }

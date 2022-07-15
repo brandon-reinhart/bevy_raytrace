@@ -14,18 +14,12 @@ pub struct IntersectionGPU {
     point: Vec3,
     normal: Vec3,
     material: u32,
-}
-
-#[derive(ShaderType, Clone, Default, Debug)]
-pub struct IntersectionBufGPU {
-    pub intersection_count: u32,
-    #[size(runtime)]
-    pub intersections: Vec<IntersectionGPU>,
+    front_face: u32,
 }
 
 #[derive(Default)]
 pub struct IntersectionGPUStorage {
-    pub buffer: StorageBuffer<IntersectionBufGPU>,
+    pub buffer: StorageBuffer<Vec<IntersectionGPU>>,
 }
 
 pub struct RayTraceIntersectionsPlugin;
@@ -47,13 +41,11 @@ fn prepare(
     // Allocate as many intersections as we have rays.
     let ray_count = (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1) as usize;
 
-    if intersections.buffer.get().intersections.len() != ray_count {
-        intersections.buffer.get_mut().intersection_count = ray_count as u32;
-        intersections.buffer.get_mut().intersections.clear();
+    if intersections.buffer.get().len() != ray_count {
+        intersections.buffer.get_mut().clear();
         intersections
             .buffer
             .get_mut()
-            .intersections
             .append(&mut vec![IntersectionGPU::default(); ray_count]);
 
         intersections
@@ -63,7 +55,7 @@ fn prepare(
         println!(
             "Intersection Buffer: {:?} {:?}",
             ray_count,
-            intersections.buffer.get().intersections.size()
+            intersections.buffer.get().size()
         );
     }
 }

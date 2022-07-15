@@ -34,13 +34,13 @@ pub struct Sphere {
 }
 
 pub fn init_spheres(mut commands: Commands, materials: Res<MaterialCache>) {
-    /*     commands
-    .spawn()
-    .insert(Transform::from_xyz(0.0, -100.5, -1.0))
-    .insert(Sphere {
-        radius: 100.0,
-        material: materials.get_index_of("ground"),
-    });*/
+    commands
+        .spawn()
+        .insert(Transform::from_xyz(0.0, -100.5, -1.0))
+        .insert(Sphere {
+            radius: 100.0,
+            material: materials.get_index_of("ground"),
+        });
 
     commands
         .spawn()
