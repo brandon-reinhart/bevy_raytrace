@@ -49,7 +49,7 @@ pub fn init_spheres(mut commands: Commands, materials: Res<MaterialCache>) {
             radius: 0.5,
             material: materials.get_index_of("center"),
         });
-    /*
+
     commands
         .spawn()
         .insert(Transform::from_xyz(-1.0, 0.0, -1.0))
@@ -65,7 +65,6 @@ pub fn init_spheres(mut commands: Commands, materials: Res<MaterialCache>) {
             radius: 0.5,
             material: materials.get_index_of("right"),
         });
-        */
 }
 
 pub struct SphereRenderPlugin;

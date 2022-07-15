@@ -20,6 +20,7 @@ struct ray {
     origin: vec3<f32>,
     dir: vec3<f32>,
     pixel: u32,
+    bounces: u32,
 };
 
 struct ray_buf {
@@ -32,6 +33,7 @@ struct intersection {
     position: vec3<f32>,
     normal: vec3<f32>,
     material: u32,
+    front_face: u32,
 };
 
 struct intersection_buf {
@@ -72,7 +74,7 @@ fn point_at(r: ray, t: f32) -> vec3<f32> {
 }
 
 fn default_intersection() -> intersection {
-    return intersection ( VERY_FAR, vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0), u32(0) );
+    return intersection ( VERY_FAR, vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0), u32(0), 0u );
 }
 
 fn sqr( x: f32 ) -> f32 {
@@ -86,6 +88,7 @@ fn intersect_sphere(r: ray, s: sphere, t_min: f32, t_max: f32) -> intersection {
     let a = sqr(length(r.dir));
     let half_b = dot(oc, r.dir);
     let c = sqr(length(oc)) - sqr(s.radius);
+
     let dis = sqr(half_b) - a*c;
     if ( dis < 0.0 ) {
         return i;
@@ -104,11 +107,11 @@ fn intersect_sphere(r: ray, s: sphere, t_min: f32, t_max: f32) -> intersection {
     i.t = root;
     i.position = point_at(r, root);
     i.normal = normalize((i.position - s.center) / s.radius);
-    //i.front_face = true;
+    i.front_face = 1u;
 
     if ( dot(r.dir, i.normal) > 0.0) {
-        i.normal = - i.normal;
-        //hit_result.front_face = false;
+        i.normal = -i.normal;
+        i.front_face = 0u;
     }
 
     i.material = s.material;

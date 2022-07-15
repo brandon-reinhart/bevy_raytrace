@@ -20,6 +20,7 @@ struct ray {
     origin: vec3<f32>,
     dir: vec3<f32>,
     pixel: u32,
+    bounces: u32,
 };
 
 struct ray_buf {
@@ -32,6 +33,7 @@ struct intersection {
     position: vec3<f32>,
     normal: vec3<f32>,
     material: u32,
+    front_face: u32,
 };
 
 struct intersection_buf {
@@ -52,8 +54,8 @@ struct object_list {
 struct material {
     color: vec4<f32>,
     reflectance: i32,
-    pad0: i32,
-    pad1: i32,
+    fuzziness: f32,
+    index_of_refraction: f32,
     pad2: i32,
 }
 
@@ -110,6 +112,46 @@ fn random_float2( seed: u32 ) -> f32
 	return f32(random_int( seed ) >> 16u) / 65535.0f;
 }
 
+fn rand(c: vec2<f32>) -> f32 {
+	return fract( sin( dot( c.xy, vec2(12.9898, 78.233 ) ) ) * 43758.5453 );
+}
+
+fn noise( p: vec2<f32>, freq: f32 ) -> f32 {
+	let unit = f32(camera.render_width)/freq;
+	let ij = floor(p/unit);
+	var xy = (p%unit)/unit;
+	//xy = 3.*xy*xy-2.*xy*xy*xy;
+	xy = .5*(1.-cos(PI*xy));
+	let a = rand(ij+vec2<f32>(0.,0.));
+	let b = rand(ij+vec2<f32>(1.,0.));
+	let c = rand(ij+vec2<f32>(0.,1.));
+	let d = rand(ij+vec2<f32>(1.,1.));
+	let x1 = mix(a, b, xy.x);
+	let x2 = mix(c, d, xy.x);
+	return mix(x1, x2, xy.y);
+}
+
+fn perlin_noise(p: vec2<f32>, res: u32) -> f32{
+	let persistance = .5;
+	var n = 0.;
+	var normK = 0.;
+	var f = 4.;
+	var amp = 1.;
+	var iCount = 0u;
+	for (var i = 0u; i<50u; i++){
+		n+=amp*noise(p, f);
+		f*=2.;
+		normK+=amp;
+		amp*=persistance;
+		if (iCount == res) {
+            break;
+        }
+		iCount++;
+	}
+	let nf = n/normK;
+	return nf*nf*nf*nf;
+}
+
 let NEWTON_ITER = 2;
 let HALLEY_ITER = 0;
 
@@ -130,69 +172,13 @@ fn cbrt( x:f32 ) -> f32
     return y;
 }
 
-// http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html
-fn radical_inverse_vdc(b: u32) -> f32 {
-    var bits = b;
-     bits = (bits << 16u) | (bits >> 16u);
-     bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
-     bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
-     bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
-     bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
-     return f32(bits) * 2.3283064365386963e-10; // / 0x100000000
-}
-
-fn hammersley2d(i: u32, n: u32) -> vec2<f32> {
-     return vec2(f32(i)/f32(n), radical_inverse_vdc(i));
- }
-
-fn hemisphere_sample_uniform(u: f32, v: f32) -> vec3<f32> {
-     let phi = v * 2.0 * PI;
-     let cos_theta = 1.0 - u;
-     let sin_theta = sqrt(1.0 - cos_theta * cos_theta);
-     return vec3(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
-}
-    
-fn hemisphere_sample_cos(u: f32, v:f32) -> vec3<f32> {
-     let phi = v * 2.0 * PI;
-     let cos_theta = sqrt(1.0 - u);
-     let sin_theta = sqrt(1.0 - cos_theta * cos_theta);
-     return vec3(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
- }
-
- struct onb {
-    b1: vec3<f32>,
-    b2: vec3<f32>,
- }
-
-//https://graphics.pixar.com/library/OrthonormalB/paper.pdf
-fn revised_onb( n:vec3<f32> ) -> onb
-{
-    var onb = onb(vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0,0.0,0.0));
-
-	if ( n.z < 0.f )
-	{
-		let a = 1.0f / (1.0f - n.z);
-		let b = n.x * n.y * a;
-		onb.b1 = vec3<f32>(1.0f - n.x * n.x * a, -b, n.x);
-		onb.b2 = vec3<f32>(b, n.y * n.y*a - 1.0f, -n.y);
-	}
-	else
-	{
-		let a = 1.0f / (1.0f + n.z);
-		let b = -n.x * n.y * a;
-		onb.b1 = vec3<f32>(1.0f - n.x * n.x * a, b, -n.x);
-		onb.b2 = vec3<f32>(b, 1.0f - n.y * n.y * a, -n.y);
-	}
-
-    return onb;
-}
-
-fn random_in_unit_sphere(seed: u32) -> vec3<f32> {
+fn random_in_unit_sphere(rvec: vec3<f32>, seed: u32) -> vec3<f32> {
     var u = random_float2(seed);
-    var v = random_float2(seed);
+    var v = random_float2(seed+(seed/2u));
+    var w = random_float2(seed-(seed/2u));
     var theta = u * 2.0 * PI;
     var phi = acos(2.0 * v - 1.0);
-    var r1 = cbrt(random_float2(seed));
+    var r1 = cbrt(w);
     var sinTheta = sin(theta);
     var cosTheta = cos(theta);
     var sinPhi = sin(phi);
@@ -201,66 +187,80 @@ fn random_in_unit_sphere(seed: u32) -> vec3<f32> {
     var y = r1 * sinPhi * sinTheta;
     var z = r1 * cosPhi;
 
-    return normalize(vec3<f32>(x, y, z));
+    return vec3<f32>(x, y, z);
 }
 
-// Light is scattered uniformly in all directions.
-// Surface color is the same for all viewing directions.
+fn random_unit_vector(rvec: vec3<f32>, seed: u32) -> vec3<f32> {
+    return normalize(random_in_unit_sphere(rvec, seed));
+}
 
 fn lambertian( r: ray, i: intersection, m: material, c: vec4<f32>, seed: u32 ) -> shade {
-//	let r1 = 2.f * PI * random_float( seed );
-//	let r2 = random_float( seed );
-//	let r2s = sqrt( r2 );
-
-//	let onb = revised_onb( i.normal );
- //   let u = onb.b1;
- //   let v = onb.b2;
-
-   // let dir = normalize( u * cos(r1) * r2s + v * sin(r1) * r2s + i.normal * sqrt( 1.0 - r2 ) );
-//    dir.x = abs( dir.x ) > epsilon ? dir.x : ( dir.x >= 0 ? epsilon : -epsilon );
-//    dir.y = abs( dir.y ) > epsilon ? dir.y : ( dir.y >= 0 ? epsilon : -epsilon );
-//    dir.z = abs( dir.z ) > epsilon ? dir.z : ( dir.z >= 0 ? epsilon : -epsilon );
-//    r.direction = vec4( ray_direction, 1.f );
-
-
-    //let destination = i.position + i.normal + wooj;
-    //let direction = normalize(destination - i.position);
-
-//    let blah = cos(dir)
-
-    //let z = acos(dot(i.normal, r.dir));
-
-//    let diffuse_coef = 1.0f;
-//    let illumination_from_source = 1.0f;
-//    let blah = max(0, dot(i.normal, r.dir));
-
-    // Determine a random direction in a sphere...
-//    var x = random_float2(seed);
-  //  var y = random_float2(seed);
-    //var z = random_float2(seed);
-    //var random_in_sphere = vec3<f32>(x,y,z);
-
-    //var c = cbrt(random_float2(seed));
-    //random_in_sphere *= c;
-
-
-
-    var destination =  i.position + i.normal + random_in_unit_sphere(1u);
-    //dir = normalize(dir);
-    //random_in_sphere = normalize(random_in_sphere);
-
-//    dir = dir * random_float(seed);
-//    dir = dir + i.normal;
-  //  dir = normalize(dir);
-
-    var e_origin = i.position + EPSILON * i.normal;
+    var offset = i.normal * EPSILON;
+    var destination =  i.position + i.normal + offset + random_unit_vector(i.normal, seed);
+    var e_origin = i.position + offset;
     var e_dir = normalize(destination - e_origin);
 
+    let c = m.color;//vec4<f32>(0.5);
+    let e = ray(e_origin, e_dir, r.pixel, r.bounces+1u);
 
+    return shade( c, e );
+}
 
-    //let c = m.color;
-    let c = vec4<f32>(1.0);
-    let e = ray(e_origin, e_dir, r.pixel);
+fn reflect( v: vec3<f32>, n: vec3<f32> ) -> vec3<f32> {
+    return v - 2.0*dot(v,n) * n;
+}
+
+fn metallic( r: ray, i: intersection, m: material, seed: u32 ) -> shade {
+    let c = m.color;
+    let offset = i.normal * EPSILON;
+    let e_origin = i.position + offset;
+    let reflected = normalize(reflect(r.dir, i.normal));
+    let noise = m.fuzziness*random_unit_vector(i.normal,seed);
+    let e_dir = normalize( reflected + noise );
+    let e = ray(e_origin, e_dir, r.pixel, r.bounces+1u);
+
+    return shade( c, e );
+}
+
+fn refract( uv: vec3<f32>, n: vec3<f32>, etai_over_etat: f32 ) -> vec3<f32> {
+    let cos_theta = min(dot(-uv, n), 1.0);
+    let r_out_perp =  etai_over_etat * (uv + cos_theta*n);
+    let l = length(r_out_perp);
+    let r_out_parallel = -sqrt(abs(1.0 - (l*l))) * n;
+    return normalize( r_out_perp + r_out_parallel );
+}
+
+fn reflectance(cosine: f32, ref_idx: f32) -> f32 {
+    // Use Schlick's approximation for reflectance.
+    var r0 = (1.0-ref_idx) / (1.0+ref_idx);
+    r0 = r0*r0;
+    return r0 + (1.0-r0)*pow((1.0 - cosine),5.0);
+}
+
+fn dielectric( r: ray, i: intersection, m: material, seed: u32 ) -> shade {
+    let c = vec4<f32>(1.0, 1.0, 1.0, 1.0);
+    let offset = i.normal * EPSILON;
+    let e_origin = i.position + offset;
+
+    var refraction_ratio = m.index_of_refraction;
+    if ( i.front_face == 1u ) {
+        refraction_ratio = 1.0/m.index_of_refraction;
+     }
+
+    let unit_dir = normalize(r.dir);
+
+    let cos_theta = min(dot(-unit_dir, i.normal), 1.0);
+    let sin_theta = sqrt(1.0 - cos_theta*cos_theta);
+    let cannot_refract = refraction_ratio * sin_theta > 1.0;
+
+    var e_dir = vec3<f32>(0.0, 0.0, 0.0);
+//    if ( cannot_refract ||  reflectance(cos_theta, refraction_ratio) > random_float2(seed)) {
+  //      e_dir = reflect(r.dir, i.normal);
+    //} else {
+        e_dir = refract(unit_dir, i.normal, refraction_ratio);
+    //}
+
+    let e = ray(e_origin, e_dir, r.pixel, r.bounces+1u);
 
     return shade( c, e );
 }
@@ -269,16 +269,11 @@ fn lambertian( r: ray, i: intersection, m: material, c: vec4<f32>, seed: u32 ) -
 fn miss(r: ray) -> shade {
     let unit = normalize(r.dir);
     let t = 0.5 * unit.y + 1.0;
-    //let sky_gradient = (1.0-t) * vec3<f32>(1.0, 1.0, 1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
-    let sky_gradient = vec3<f32>(0.5, 0.7, 1.0);
+    let sky_gradient = (1.0-t) * vec3<f32>(1.0, 1.0, 1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
 
-    let no_extension = ray( vec3<f32>(VERY_FAR,VERY_FAR,VERY_FAR), vec3<f32>(VERY_FAR,VERY_FAR,VERY_FAR), r.pixel );
+    let no_extension = ray( vec3<f32>(VERY_FAR,VERY_FAR,VERY_FAR), vec3<f32>(VERY_FAR,VERY_FAR,VERY_FAR), r.pixel, r.bounces+1u );
 
     return shade( vec4<f32>(sky_gradient, 1.0), no_extension );
-}
-
-fn metallic( i: intersection, m: material ) -> vec4<f32> {
-    return m.color;
 }
 
 @compute @workgroup_size(128, 1, 1)
@@ -304,38 +299,30 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
 
     if ( i.t == VERY_FAR ) {
         var s = miss(r);
-        color = vec4<f32>( 0.5*color.xyz *s.color.xyz, 1.0);
+        color = vec4<f32>( color.xyz * s.color.xyz, 1.0);
 
         ray_buffer.rays[index] = s.extension;
     } else {
         let material = materials.m[i.material];
-        //if ( material.reflectance == 0 ) {
-            var s = lambertian(r, i, material, color, seed);
-            color = vec4<f32>(0.5 *color.xyz *s.color.xyz, 1.0);
-            //color = vec4<f32>( color.xyz + vec3<f32>(0.0, 1.0, 0.0), 1.0);
-
-//            if ( materials.m[0].color.y == 1.0 ) {
-  //              color = vec4<f32>( 1.0, 0.0, 0.0, 1.0 );
-    //        } else {
-      //          color = materials.m[0].color;
-        //    }
-
-            ray_buffer.rays[index] = s.extension;
-//        } else if ( material.reflectance == 1 ) {
-            //color = metallic(i, material);
-  //      }
+        if ( r.bounces == 5u ) {
+            color = vec4<f32>(color.xyz * vec3<f32>(0.0), 1.0);
+            ray_buffer.rays[index] = ray( vec3<f32>(VERY_FAR,VERY_FAR,VERY_FAR), vec3<f32>(VERY_FAR,VERY_FAR,VERY_FAR), r.pixel, r.bounces+1u );
+        } else {
+            if ( material.reflectance == 0 ) {
+                var s = lambertian(r, i, material, color, seed);
+                color = vec4<f32>(color.xyz * s.color.xyz, 1.0);
+                ray_buffer.rays[index] = s.extension;
+            } else if ( material.reflectance == 1 ) {
+                var s = metallic(r, i, material, seed);
+                color = vec4<f32>(color.xyz * s.color.xyz, 1.0);                
+                ray_buffer.rays[index] = s.extension;
+            } else if ( material.reflectance == 2 ) {
+                var s = dielectric(r, i, material, seed);
+                //color = vec4<f32>(color.xyz * s.color.xyz, 1.0);                
+                ray_buffer.rays[index] = s.extension;
+            }
+        }
     }
-
-    // Necessary bind groups:
-    // rays (to write extensions)
-    // intersections (for normals and material indexes)
-    // materials (to look up refraction, etc)
-
-    // In this shader we will determine the pixel color
-    // based on the material at the point of intersection.
-
-    // We will also generate extension rays based on the material.
-
 
     storageBarrier();
     textureStore(output, vec2<i32>(i32(x), i32(y)), color);

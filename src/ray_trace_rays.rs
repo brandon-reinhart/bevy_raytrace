@@ -14,6 +14,7 @@ pub struct RayGPU {
     origin: Vec3,
     dir: Vec3,
     pixel: u32,
+    bounces: u32,
 }
 
 #[derive(ShaderType, Clone, Default, Debug)]

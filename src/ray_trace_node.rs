@@ -185,8 +185,7 @@ impl render_graph::Node for RayTraceNode {
                 self.clear(world, &mut pass);
                 self.generate(world, &mut pass);
 
-                let bounces = 3;
-                for _ in 0..bounces {
+                for _ in 0..6 {
                     self.prepass(world, &mut pass);
                     self.intersect(world, &mut pass);
                     self.shade(world, &mut pass);

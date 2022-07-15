@@ -20,6 +20,7 @@ struct ray {
     origin: vec3<f32>,
     dir: vec3<f32>,
     pixel: u32,
+    bounces: u32,
 };
 
 struct ray_buf {
@@ -90,7 +91,7 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
     let direction = normalize( convergence_point - origin );
 
     let pixel = u32( y * f32(camera.render_width) + x );
-    var r = ray( origin, direction, pixel );
+    var r = ray( origin, direction, pixel, 0u );
 
     storageBarrier();
     ray_buffer.rays[index] = r;
