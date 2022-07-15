@@ -46,6 +46,9 @@ struct object_list {
     spheres: array<sphere>,
 };
 
+let VERY_FAR: f32 = 1e20f;
+let EPSILON: f32 = 3.552713678800501e-15;
+
 @group(0) @binding(0)
 var<uniform> camera: camera_config;
 
@@ -61,8 +64,6 @@ var<storage, read_write> intersection_buffer: intersection_buf;
 @group(2) @binding(0)
 var<storage, read> objects: object_list;
 
-let VERY_FAR: f32 = 1e20f;
-
 fn point_at(r: ray, t: f32) -> vec3<f32> {
     return r.origin + r.dir * t;
 }
@@ -71,21 +72,25 @@ fn default_intersection() -> intersection {
     return intersection ( VERY_FAR, vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0), u32(0) );
 }
 
+fn sqr( x: f32 ) -> f32 {
+    return x*x;
+}
+
 fn intersect_sphere(r: ray, s: sphere, t_min: f32, t_max: f32) -> intersection {
     var i = default_intersection();
 
     let oc = r.origin - s.center;
-    let a = length(r.dir)*length(r.dir);
-    let half_b = dot(oc, r.dir );
-    let c = length(oc)*length(oc) - s.radius * s.radius;
-    let d = half_b*half_b - a*c;
-    if ( d < 0.0 ) {
+    let a = sqr(length(r.dir));
+    let half_b = dot(oc, r.dir);
+    let c = sqr(length(oc)) - sqr(s.radius);
+    let dis = sqr(half_b) - a*c;
+    if ( dis < 0.0 ) {
         return i;
     }
 
-    let sqrtd = sqrt(d);
+    let sqrtd = sqrt(dis);
 
-    var root = (-half_b / sqrtd) / a;
+    var root = (-half_b - sqrtd) / a;
     if ( root < t_min || t_max < root ) {
         root = (-half_b + sqrtd) / a;
         if ( root < t_min || t_max < root ) {
@@ -108,10 +113,11 @@ fn intersect_sphere(r: ray, s: sphere, t_min: f32, t_max: f32) -> intersection {
     return i;
 }
 
+// Brute force. The world isn't partitioned in any way.
 fn intersect_world(r: ray) -> intersection {
     var closest_hit = default_intersection();
     for(var i: i32 = 0; i < i32(objects.sphere_count); i = i + 1 ) {
-        let hit = intersect_sphere( r, objects.spheres[i], 0.0, VERY_FAR );
+        let hit = intersect_sphere( r, objects.spheres[i], EPSILON, VERY_FAR );
         if ( hit.t < closest_hit.t ) {
             closest_hit = hit;
         }        
@@ -132,6 +138,10 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
     let index2 = index - u32(1);
 
     let r = ray_buffer.rays[index2];
+    if (r.origin.x == VERY_FAR) {
+        return;
+    }
+
     let i = intersect_world(r);
 
     storageBarrier();

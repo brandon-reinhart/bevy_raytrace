@@ -17,8 +17,8 @@ pub enum Reflectance {
 
 // These conversion functions are probably temporary.
 
-impl From<u32> for Reflectance {
-    fn from(other: u32) -> Self {
+impl From<i32> for Reflectance {
+    fn from(other: i32) -> Self {
         match other {
             0 => Reflectance::Lambertian,
             _ => Reflectance::Metallic,
@@ -26,8 +26,8 @@ impl From<u32> for Reflectance {
     }
 }
 
-impl Into<u32> for Reflectance {
-    fn into(self) -> u32 {
+impl Into<i32> for Reflectance {
+    fn into(self) -> i32 {
         match self {
             Reflectance::Lambertian => 0,
             _ => 1,
@@ -50,8 +50,8 @@ pub struct RayTraceMaterial {
 impl From<MaterialGPU> for RayTraceMaterial {
     fn from(other: MaterialGPU) -> Self {
         RayTraceMaterial {
-            reflectance: other.reflectance.into(),
             color: Color::rgb(other.color.x, other.color.y, other.color.z),
+            reflectance: other.reflectance.into(),
         }
     }
 }
@@ -59,14 +59,14 @@ impl From<MaterialGPU> for RayTraceMaterial {
 #[derive(ShaderType, Clone, Default, Debug)]
 pub struct MaterialGPU {
     color: Vec3,
-    reflectance: u32,
+    reflectance: i32,
 }
 
 impl From<RayTraceMaterial> for MaterialGPU {
     fn from(other: RayTraceMaterial) -> Self {
         MaterialGPU {
-            reflectance: other.reflectance.into(),
             color: Vec3::new(other.color.r(), other.color.g(), other.color.b()),
+            reflectance: other.reflectance.into(),
         }
     }
 }

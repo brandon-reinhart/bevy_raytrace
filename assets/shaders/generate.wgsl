@@ -74,8 +74,8 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
     // Get a stratified point inside the pixel?
     // todo: Read about good techniques for determining the ray.
     // For now, a simple (bad) approach:
-    let x = f32(x);// + random_float2(seed);
-    let y = f32(y);// + random_float2(seed);
+    let x = f32(x);// + random_float2(seed) / 1000.0;
+    let y = f32(y);// + random_float2(seed) / 1000.0;
 
 	let normalized_i = ( x / f32(camera.render_width) ) - 0.5;
     let normalized_j = ( ( f32(camera.render_height) - y ) / f32(camera.render_height) ) - 0.5;
@@ -92,4 +92,4 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
 
     storageBarrier();
     ray_buffer.rays[index] = r;
-}
+}   
