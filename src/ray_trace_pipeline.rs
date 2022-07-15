@@ -12,6 +12,8 @@ pub struct RayTraceBindGroups {
 }
 
 pub struct RayTracePipelines {
+    pub clear: CachedComputePipelineId,
+    pub prepass: CachedComputePipelineId,
     pub generate: CachedComputePipelineId,
     pub intersect: CachedComputePipelineId,
     pub shade: CachedComputePipelineId,
@@ -26,10 +28,54 @@ pub struct RayTracePipeline {
 impl RayTracePipeline {
     fn create_pipelines(world: &mut World, bind_groups: &RayTraceBindGroups) -> RayTracePipelines {
         RayTracePipelines {
+            clear: RayTracePipeline::create_clear_pipeline(world, bind_groups),
+            prepass: RayTracePipeline::create_prepass_pipeline(world, bind_groups),
             generate: RayTracePipeline::create_generate_pipeline(world, bind_groups),
             intersect: RayTracePipeline::create_intersect_pipeline(world, bind_groups),
             shade: RayTracePipeline::create_shade_pipeline(world, bind_groups),
         }
+    }
+
+    fn create_clear_pipeline(
+        world: &mut World,
+        bind_groups: &RayTraceBindGroups,
+    ) -> CachedComputePipelineId {
+        let shader = world.resource::<AssetServer>().load("shaders/clear.wgsl");
+
+        let mut pipeline_cache = world.resource_mut::<PipelineCache>();
+
+        pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
+            label: Some(Cow::from("clear")),
+            layout: Some(vec![
+                bind_groups.camera_globals.clone(),
+                bind_groups.rays_intersections.clone(),
+                bind_groups.output.clone(),
+            ]),
+            shader,
+            shader_defs: vec![],
+            entry_point: Cow::from("main"),
+        })
+    }
+
+    fn create_prepass_pipeline(
+        world: &mut World,
+        bind_groups: &RayTraceBindGroups,
+    ) -> CachedComputePipelineId {
+        let shader = world.resource::<AssetServer>().load("shaders/prepass.wgsl");
+
+        let mut pipeline_cache = world.resource_mut::<PipelineCache>();
+
+        pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
+            label: Some(Cow::from("prepass")),
+            layout: Some(vec![
+                bind_groups.camera_globals.clone(),
+                bind_groups.rays_intersections.clone(),
+                bind_groups.output.clone(),
+            ]),
+            shader,
+            shader_defs: vec![],
+            entry_point: Cow::from("main"),
+        })
     }
 
     fn create_generate_pipeline(

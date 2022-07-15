@@ -9,6 +9,13 @@ struct camera_config {
     camera_position: vec3<f32>,
 };
 
+struct globals_buf {
+    clear_index: atomic<u32>,
+    generate_index: atomic<u32>,
+    intersect_index: atomic<u32>,
+    shade_index: atomic<u32>,
+};
+
 struct ray {
     origin: vec3<f32>,
     dir: vec3<f32>,
@@ -18,10 +25,6 @@ struct ray {
 struct ray_buf {
     ray_count: u32,
     rays: array<ray>,
-};
-
-struct globals_buf {
-    ray_index: atomic<u32>,
 };
 
 @group(0) @binding(0)
@@ -58,8 +61,7 @@ fn random_float2( seed: u32 ) -> f32
 @compute @workgroup_size(128, 1, 1)
 fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
 {
-    let index = atomicAdd( &globals.ray_index, u32(1) );
-
+    let index = atomicAdd( &globals.generate_index, 1u );
     if ( index >= ray_buffer.ray_count ) {
         return;
     }

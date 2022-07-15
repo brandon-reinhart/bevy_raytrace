@@ -34,6 +34,46 @@ impl Default for RayTraceNode {
 }
 
 impl RayTraceNode {
+    fn clear<'a>(&self, world: &'a World, pass: &mut ComputePass<'a>) {
+        let num_dispatch = (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1) / WORKGROUP_SIZE;
+
+        let camera_globals = &world.resource::<CameraGlobalsBindGroup>().0;
+        let rays_intersections = &world.resource::<RaysIntersectionsBindGroup>().0;
+        let output = &world.resource::<OutputImageBindGroup>().0;
+
+        let pipeline_cache = world.resource::<PipelineCache>();
+        let pipeline = world.resource::<RayTracePipeline>();
+
+        pass.set_bind_group(0, camera_globals, &[]);
+        pass.set_bind_group(1, rays_intersections, &[]);
+        pass.set_bind_group(2, output, &[]);
+
+        let pipeline = pipeline_cache
+            .get_compute_pipeline(pipeline.pipelines.clear)
+            .unwrap();
+        pass.set_pipeline(pipeline);
+        pass.dispatch_workgroups(num_dispatch, 1, 1);
+    }
+
+    fn prepass<'a>(&self, world: &'a World, pass: &mut ComputePass<'a>) {
+        let camera_globals = &world.resource::<CameraGlobalsBindGroup>().0;
+        let rays_intersections = &world.resource::<RaysIntersectionsBindGroup>().0;
+        let output = &world.resource::<OutputImageBindGroup>().0;
+
+        let pipeline_cache = world.resource::<PipelineCache>();
+        let pipeline = world.resource::<RayTracePipeline>();
+
+        pass.set_bind_group(0, camera_globals, &[]);
+        pass.set_bind_group(1, rays_intersections, &[]);
+        pass.set_bind_group(2, output, &[]);
+
+        let pipeline = pipeline_cache
+            .get_compute_pipeline(pipeline.pipelines.prepass)
+            .unwrap();
+        pass.set_pipeline(pipeline);
+        pass.dispatch_workgroups(1, 1, 1);
+    }
+
     fn generate<'a>(&self, world: &'a World, pass: &mut ComputePass<'a>) {
         let num_dispatch = (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1) / WORKGROUP_SIZE;
 
@@ -115,7 +155,9 @@ impl render_graph::Node for RayTraceNode {
         // if the corresponding pipeline has loaded, transition to the next stage
         match self.state {
             RayTraceState::Loading => {
-                if is_pipeline_ready(pipeline_cache, pipeline.pipelines.generate)
+                if is_pipeline_ready(pipeline_cache, pipeline.pipelines.clear)
+                    && is_pipeline_ready(pipeline_cache, pipeline.pipelines.prepass)
+                    && is_pipeline_ready(pipeline_cache, pipeline.pipelines.generate)
                     && is_pipeline_ready(pipeline_cache, pipeline.pipelines.intersect)
                     && is_pipeline_ready(pipeline_cache, pipeline.pipelines.shade)
                 {
@@ -140,11 +182,15 @@ impl render_graph::Node for RayTraceNode {
                     .command_encoder
                     .begin_compute_pass(&ComputePassDescriptor::default());
 
+                self.clear(world, &mut pass);
                 self.generate(world, &mut pass);
-                self.intersect(world, &mut pass);
-                self.shade(world, &mut pass);
-                //                self.intersect(world, &mut pass);
-                //                self.shade(world, &mut pass);
+
+                let bounces = 3;
+                for _ in 0..bounces {
+                    self.prepass(world, &mut pass);
+                    self.intersect(world, &mut pass);
+                    self.shade(world, &mut pass);
+                }
             }
         }
 

@@ -9,6 +9,13 @@ struct camera_config {
     camera_position: vec3<f32>,
 };
 
+struct globals_buf {
+    clear_index: atomic<u32>,
+    generate_index: atomic<u32>,
+    intersect_index: atomic<u32>,
+    shade_index: atomic<u32>,
+};
+
 struct ray {
     origin: vec3<f32>,
     dir: vec3<f32>,
@@ -18,10 +25,6 @@ struct ray {
 struct ray_buf {
     ray_count: u32,
     rays: array<ray>,
-};
-
-struct globals_buf {
-    ray_index: atomic<u32>,
 };
 
 struct intersection {
@@ -129,15 +132,12 @@ fn intersect_world(r: ray) -> intersection {
 @compute @workgroup_size(128, 1, 1)
 fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
 {
-    let index = atomicSub( &globals.ray_index, u32(1) );
-
-    if ( index == u32(0) ) {
+    let index = atomicAdd( &globals.intersect_index, 1u );
+    if ( index >= ray_buffer.ray_count ) {
         return;
     }
 
-    let index2 = index - u32(1);
-
-    let r = ray_buffer.rays[index2];
+    let r = ray_buffer.rays[index];
     if (r.origin.x == VERY_FAR) {
         return;
     }
@@ -145,5 +145,5 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
     let i = intersect_world(r);
 
     storageBarrier();
-    intersection_buffer.intersections[index2] = i;
+    intersection_buffer.intersections[index] = i;
 }

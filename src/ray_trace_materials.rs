@@ -58,15 +58,26 @@ impl From<MaterialGPU> for RayTraceMaterial {
 
 #[derive(ShaderType, Clone, Default, Debug)]
 pub struct MaterialGPU {
-    color: Vec3,
+    color: Vec4,
     reflectance: i32,
+    pad0: i32,
+    pad1: i32,
+    pad2: i32,
 }
 
 impl From<RayTraceMaterial> for MaterialGPU {
     fn from(other: RayTraceMaterial) -> Self {
         MaterialGPU {
-            color: Vec3::new(other.color.r(), other.color.g(), other.color.b()),
+            color: Vec4::new(
+                other.color.r(),
+                other.color.g(),
+                other.color.b(),
+                other.color.a(),
+            ),
             reflectance: other.reflectance.into(),
+            pad0: 0,
+            pad1: 0,
+            pad2: 0,
         }
     }
 }
@@ -123,28 +134,31 @@ fn init_materials_cache() -> MaterialCache {
         "ground".to_string(),
         RayTraceMaterial {
             reflectance: Reflectance::Lambertian,
-            color: Color::rgb(0.8, 0.8, 0.0),
+            color: Color::rgba(0.8, 0.8, 0.0, 1.0),
         },
     );
+
     cache.materials.insert(
         "center".to_string(),
         RayTraceMaterial {
             reflectance: Reflectance::Lambertian,
-            color: Color::rgb(0.7, 0.3, 0.3),
+            color: Color::rgba(0.0, 1.0, 0.0, 1.0),
         },
     );
+
     cache.materials.insert(
         "left".to_string(),
         RayTraceMaterial {
             reflectance: Reflectance::Metallic,
-            color: Color::rgb(0.8, 0.8, 0.8),
+            color: Color::rgba(1.0, 0.0, 0.0, 1.0),
         },
     );
+    
     cache.materials.insert(
         "right".to_string(),
         RayTraceMaterial {
             reflectance: Reflectance::Metallic,
-            color: Color::rgb(0.8, 0.6, 0.2),
+            color: Color::rgba(0.0, 0.0, 1.0, 1.0),
         },
     );
 
@@ -167,7 +181,10 @@ fn prepare(
         for (_, mat) in cache.materials.iter() {
             materials.buffer.get_mut().materials.push(MaterialGPU {
                 reflectance: mat.reflectance.clone().into(),
-                color: Vec3::new(mat.color.r(), mat.color.g(), mat.color.b()),
+                color: Vec4::new(mat.color.r(), mat.color.g(), mat.color.b(), mat.color.a()),
+                pad0: 0,
+                pad1: 0,
+                pad2: 0,
             });
         }
 

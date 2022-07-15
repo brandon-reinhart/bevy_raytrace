@@ -9,6 +9,13 @@ struct camera_config {
     camera_position: vec3<f32>,
 };
 
+struct globals_buf {
+    clear_index: atomic<u32>,
+    generate_index: atomic<u32>,
+    intersect_index: atomic<u32>,
+    shade_index: atomic<u32>,
+};
+
 struct ray {
     origin: vec3<f32>,
     dir: vec3<f32>,
@@ -18,10 +25,6 @@ struct ray {
 struct ray_buf {
     ray_count: u32,
     rays: array<ray>,
-};
-
-struct globals_buf {
-    ray_index: atomic<u32>,
 };
 
 struct intersection {
@@ -47,8 +50,11 @@ struct object_list {
 };
 
 struct material {
-    color: vec3<f32>,
+    color: vec4<f32>,
     reflectance: i32,
+    pad0: i32,
+    pad1: i32,
+    pad2: i32,
 }
 
 struct material_buf {
@@ -61,6 +67,8 @@ struct shade {
 }
 
 let VERY_FAR: f32 = 1e20f;
+let EPSILON: f32 = 0.00001;
+let PI:f32 = 3.14159265358979;
 
 @group(0) @binding(0)
 var<uniform> camera: camera_config;
@@ -97,14 +105,29 @@ fn random_float( seed: u32 ) -> f32 // [0,1]
 	return f32( random_int( seed ) ) * f32(2.3283064365387e-10);
 }
 
-fn miss(r: ray) -> shade {
-    let unit = normalize(r.dir);
-    let t = 0.5 * unit.y + 1.0;
-    let sky_gradient = (1.0-t) * vec3<f32>(1.0, 1.0, 1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
+fn random_float2( seed: u32 ) -> f32
+{
+	return f32(random_int( seed ) >> 16u) / 65535.0f;
+}
 
-    let no_extension = ray( vec3<f32>(VERY_FAR,VERY_FAR,VERY_FAR), vec3<f32>(VERY_FAR,VERY_FAR,VERY_FAR), r.pixel );
+let NEWTON_ITER = 2;
+let HALLEY_ITER = 0;
 
-    return shade( vec4<f32>(sky_gradient, 1.0), no_extension );
+fn cbrt( x:f32 ) -> f32
+{
+	var y = sign(x) * f32( u32( abs(x) ) / 3u + 0x2a514067u );
+
+	for( var i = 0; i < NEWTON_ITER; i=i+1 ) {
+    	y = ( 2. * y + x / ( y * y ) ) * .333333333;
+    }
+
+    for( var i = 0; i < HALLEY_ITER; i=i+1 )
+    {
+    	let y3 = y * y * y;
+        y *= ( y3 + 2. * x ) / ( 2. * y3 + x );
+    }
+    
+    return y;
 }
 
 // http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html
@@ -117,8 +140,6 @@ fn radical_inverse_vdc(b: u32) -> f32 {
      bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
      return f32(bits) * 2.3283064365386963e-10; // / 0x100000000
 }
-
-let PI:f32 = 3.14159265358979;
 
 fn hammersley2d(i: u32, n: u32) -> vec2<f32> {
      return vec2(f32(i)/f32(n), radical_inverse_vdc(i));
@@ -166,16 +187,36 @@ fn revised_onb( n:vec3<f32> ) -> onb
     return onb;
 }
 
+fn random_in_unit_sphere(seed: u32) -> vec3<f32> {
+    var u = random_float2(seed);
+    var v = random_float2(seed);
+    var theta = u * 2.0 * PI;
+    var phi = acos(2.0 * v - 1.0);
+    var r1 = cbrt(random_float2(seed));
+    var sinTheta = sin(theta);
+    var cosTheta = cos(theta);
+    var sinPhi = sin(phi);
+    var cosPhi = cos(phi);
+    var x = r1 * sinPhi * cosTheta;
+    var y = r1 * sinPhi * sinTheta;
+    var z = r1 * cosPhi;
+
+    return normalize(vec3<f32>(x, y, z));
+}
+
+// Light is scattered uniformly in all directions.
+// Surface color is the same for all viewing directions.
+
 fn lambertian( r: ray, i: intersection, m: material, c: vec4<f32>, seed: u32 ) -> shade {
-	let r1 = 2.f * PI * random_float( seed );
-	let r2 = random_float( seed );
-	let r2s = sqrt( r2 );
+//	let r1 = 2.f * PI * random_float( seed );
+//	let r2 = random_float( seed );
+//	let r2s = sqrt( r2 );
 
-	let onb = revised_onb( i.normal );
-    let u = onb.b1;
-    let v = onb.b2;
+//	let onb = revised_onb( i.normal );
+ //   let u = onb.b1;
+ //   let v = onb.b2;
 
-    let dir = normalize( u * cos(r1) * r2s + v * sin(r1) * r2s + i.normal * sqrt( 1.0 - r2 ) );
+   // let dir = normalize( u * cos(r1) * r2s + v * sin(r1) * r2s + i.normal * sqrt( 1.0 - r2 ) );
 //    dir.x = abs( dir.x ) > epsilon ? dir.x : ( dir.x >= 0 ? epsilon : -epsilon );
 //    dir.y = abs( dir.y ) > epsilon ? dir.y : ( dir.y >= 0 ? epsilon : -epsilon );
 //    dir.z = abs( dir.z ) > epsilon ? dir.z : ( dir.z >= 0 ? epsilon : -epsilon );
@@ -187,23 +228,63 @@ fn lambertian( r: ray, i: intersection, m: material, c: vec4<f32>, seed: u32 ) -
 
 //    let blah = cos(dir)
 
-    let z = acos(dot(i.normal, r.dir));
+    //let z = acos(dot(i.normal, r.dir));
+
+//    let diffuse_coef = 1.0f;
+//    let illumination_from_source = 1.0f;
+//    let blah = max(0, dot(i.normal, r.dir));
+
+    // Determine a random direction in a sphere...
+//    var x = random_float2(seed);
+  //  var y = random_float2(seed);
+    //var z = random_float2(seed);
+    //var random_in_sphere = vec3<f32>(x,y,z);
+
+    //var c = cbrt(random_float2(seed));
+    //random_in_sphere *= c;
 
 
-    let c = vec4<f32>(m.color * z, 1.0);
-    let e = ray(i.position, dir, r.pixel);
+
+    var destination =  i.position + i.normal + random_in_unit_sphere(seed);
+    //dir = normalize(dir);
+    //random_in_sphere = normalize(random_in_sphere);
+
+//    dir = dir * random_float(seed);
+//    dir = dir + i.normal;
+  //  dir = normalize(dir);
+
+    var e_origin = i.position + EPSILON * i.normal;
+    var e_dir = normalize(destination - e_origin);
+
+
+
+    //let c = m.color;
+    let c = vec4<f32>(1.0);
+    let e = ray(e_origin, e_dir, r.pixel);
 
     return shade( c, e );
 }
 
+// The ray struck the sky.
+fn miss(r: ray) -> shade {
+    let unit = normalize(r.dir);
+    let t = 0.5 * unit.y + 1.0;
+    //let sky_gradient = (1.0-t) * vec3<f32>(1.0, 1.0, 1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
+    let sky_gradient = vec3<f32>(0.5, 0.7, 1.0);
+
+    let no_extension = ray( vec3<f32>(VERY_FAR,VERY_FAR,VERY_FAR), vec3<f32>(VERY_FAR,VERY_FAR,VERY_FAR), r.pixel );
+
+    return shade( vec4<f32>(sky_gradient, 1.0), no_extension );
+}
+
 fn metallic( i: intersection, m: material ) -> vec4<f32> {
-    return vec4<f32>(m.color, 1.0);
+    return m.color;
 }
 
 @compute @workgroup_size(128, 1, 1)
 fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
 {
-    let index = atomicAdd( &globals.ray_index, u32(1) );
+    let index = atomicAdd( &globals.shade_index, 1u );
     if ( index >= ray_buffer.ray_count ) {
         return;
     }
@@ -223,18 +304,26 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
 
     if ( i.t == VERY_FAR ) {
         var s = miss(r);
-        color = 0.5 * color + 0.5 * s.color;
+        color = vec4<f32>( 0.5*color.xyz + 0.5*s.color.xyz, 1.0);
+
         ray_buffer.rays[index] = s.extension;
     } else {
         let material = materials.m[i.material];
-        if ( material.reflectance == 0 ) {
+        //if ( material.reflectance == 0 ) {
             var s = lambertian(r, i, material, color, seed);
-            //color *= 0.5 * color + 0.5 * s.color;
-            color = s.color;
+            color = vec4<f32>(0.5 *color.xyz +  0.5*s.color.xyz, 1.0);
+            //color = vec4<f32>( color.xyz + vec3<f32>(0.0, 1.0, 0.0), 1.0);
+
+//            if ( materials.m[0].color.y == 1.0 ) {
+  //              color = vec4<f32>( 1.0, 0.0, 0.0, 1.0 );
+    //        } else {
+      //          color = materials.m[0].color;
+        //    }
+
             ray_buffer.rays[index] = s.extension;
-        } else if ( material.reflectance == 1 ) {
-            color = metallic(i, material);
-        }
+//        } else if ( material.reflectance == 1 ) {
+            //color = metallic(i, material);
+  //      }
     }
 
     // Necessary bind groups:
