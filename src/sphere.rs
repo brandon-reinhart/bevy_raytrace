@@ -1,4 +1,4 @@
-use crate::ray_trace_materials::MaterialCache;
+use crate::ray_trace_materials::{MaterialCache, RayTraceMaterial, Reflectance};
 use bevy::{
     prelude::*,
     render::{
@@ -7,6 +7,7 @@ use bevy::{
         MainWorld, RenderApp, RenderStage,
     },
 };
+use rand::Rng;
 
 #[derive(Component, ShaderType, Clone, Default, Debug)]
 struct SphereGPU {
@@ -33,36 +34,115 @@ pub struct Sphere {
     material: u32,
 }
 
-pub fn init_spheres(mut commands: Commands, materials: Res<MaterialCache>) {
+pub fn init_spheres(mut commands: Commands, mut materials: ResMut<MaterialCache>) {
     commands
         .spawn()
-        .insert(Transform::from_xyz(0.0, -100.5, -1.0))
+        .insert(Transform::from_xyz(0.0, -1000.0, -1.0))
         .insert(Sphere {
-            radius: 100.0,
+            radius: 1000.0,
             material: materials.get_index_of("ground"),
         });
 
+    let mut rng = rand::thread_rng();
+
+    let sphere_dim = 7;
+
+    for a in -sphere_dim..sphere_dim {
+        for b in -sphere_dim..sphere_dim {
+            //            auto choose_mat = random_double();
+            let center = Vec3::new(
+                a as f32 + 0.9 * rng.gen::<f32>(),
+                0.2,
+                b as f32 + 0.9 * rng.gen::<f32>(),
+            );
+            if (center - Vec3::new(4.0, 0.2, 0.0)).length() > 0.9 {
+                let material_name = format!("material_{}_{}", a, b);
+
+                if rng.gen::<f32>() < 0.8 {
+                    materials.materials.insert(
+                        material_name.clone(),
+                        RayTraceMaterial {
+                            reflectance: Reflectance::Lambertian,
+                            color: Color::rgba(
+                                rng.gen::<f32>(),
+                                rng.gen::<f32>(),
+                                rng.gen::<f32>(),
+                                1.0,
+                            ),
+                            fuzziness: 1.0,
+                            index_of_refraction: 0.0,
+                        },
+                    );
+                } else {
+                    materials.materials.insert(
+                        material_name.clone(),
+                        RayTraceMaterial {
+                            reflectance: Reflectance::Metallic,
+                            color: Color::rgba(
+                                rng.gen::<f32>(),
+                                rng.gen::<f32>(),
+                                rng.gen::<f32>(),
+                                1.0,
+                            ),
+                            fuzziness: rng.gen::<f32>() * 0.5,
+                            index_of_refraction: 0.0,
+                        },
+                    );
+                }
+
+                commands
+                    .spawn()
+                    .insert(Transform::from_translation(center))
+                    .insert(Sphere {
+                        radius: 0.2,
+                        material: materials.get_index_of(&material_name),
+                    });
+
+                /*
+                shared_ptr<material> sphere_material;
+
+                if (choose_mat < 0.8) {
+                    // diffuse
+                    auto albedo = color::random() * color::random();
+                    sphere_material = make_shared<lambertian>(albedo);
+                    world.add(make_shared<sphere>(center, 0.2, sphere_material));
+                } else if (choose_mat < 0.95) {
+                    // metal
+                    auto albedo = color::random(0.5, 1);
+                    auto fuzz = random_double(0, 0.5);
+                    sphere_material = make_shared<metal>(albedo, fuzz);
+                    world.add(make_shared<sphere>(center, 0.2, sphere_material));
+                } else {
+                    // glass
+                    sphere_material = make_shared<dielectric>(1.5);
+                    world.add(make_shared<sphere>(center, 0.2, sphere_material));
+                }
+                */
+            }
+        }
+    }
+
     commands
         .spawn()
-        .insert(Transform::from_xyz(0.0, 0.0, -1.0))
+        .insert(Transform::from_xyz(0.0, 1.0, 0.0))
         .insert(Sphere {
-            radius: 0.5,
+            radius: 1.0,
             material: materials.get_index_of("center"),
         });
 
     commands
         .spawn()
-        .insert(Transform::from_xyz(-1.0, 0.0, -1.0))
+        .insert(Transform::from_xyz(-4.0, 1.0, 0.0))
         .insert(Sphere {
-            radius: 0.5,
+            radius: 1.0,
             material: materials.get_index_of("left"),
         });
 
     commands
         .spawn()
-        .insert(Transform::from_xyz(1.0, 0.0, -1.0))
+        .insert(Transform::from_xyz(4.0, 1.0, 0.0))
         .insert(Sphere {
-            radius: 0.5,
+            radius: 1.0,
             material: materials.get_index_of("right"),
         });
 }

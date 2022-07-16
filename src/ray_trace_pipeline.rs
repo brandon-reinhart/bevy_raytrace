@@ -17,6 +17,7 @@ pub struct RayTracePipelines {
     pub generate: CachedComputePipelineId,
     pub intersect: CachedComputePipelineId,
     pub shade: CachedComputePipelineId,
+    pub collect: CachedComputePipelineId,
     // connect: CachedComputePipelineId,
 }
 
@@ -33,6 +34,7 @@ impl RayTracePipeline {
             generate: RayTracePipeline::create_generate_pipeline(world, bind_groups),
             intersect: RayTracePipeline::create_intersect_pipeline(world, bind_groups),
             shade: RayTracePipeline::create_shade_pipeline(world, bind_groups),
+            collect: RayTracePipeline::create_collect_pipeline(world, bind_groups),
         }
     }
 
@@ -137,6 +139,26 @@ impl RayTracePipeline {
                 bind_groups.camera_globals.clone(),
                 bind_groups.rays_intersections.clone(),
                 bind_groups.objects_materials.clone(),
+            ]),
+            shader,
+            shader_defs: vec![],
+            entry_point: Cow::from("main"),
+        })
+    }
+
+    fn create_collect_pipeline(
+        world: &mut World,
+        bind_groups: &RayTraceBindGroups,
+    ) -> CachedComputePipelineId {
+        let shader = world.resource::<AssetServer>().load("shaders/collect.wgsl");
+
+        let mut pipeline_cache = world.resource_mut::<PipelineCache>();
+
+        pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
+            label: Some(Cow::from("collect")),
+            layout: Some(vec![
+                bind_groups.camera_globals.clone(),
+                bind_groups.rays_intersections.clone(),
                 bind_groups.output.clone(),
             ]),
             shader,

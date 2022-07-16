@@ -1,24 +1,36 @@
-struct camera_config {
-    frame: u32,
-    render_width: u32,
-    render_height: u32,
+let VERY_FAR: f32 = 1e20f;
+let EPSILON: f32 = 0.001;
+let PI:f32 = 3.14159265358979;
 
-    camera_forward: vec3<f32>,
-    camera_up: vec3<f32>,
-    camera_right: vec3<f32>,
-    camera_position: vec3<f32>,
+struct camera_config {
+    transform: mat4x4<f32>,
+    forward: vec3<f32>,
+    fov: f32,
+    up: vec3<f32>,
+    pad0: f32,
+    right: vec3<f32>,
+    pad1: f32,
+    position: vec3<f32>,
+    pad2: f32,
 };
 
 struct globals_buf {
+    frame: u32,
+    render_width: u32,
+    render_height: u32,
+    samples_per_ray: u32,
     clear_index: atomic<u32>,
     generate_index: atomic<u32>,
     intersect_index: atomic<u32>,
     shade_index: atomic<u32>,
+    collect_index: atomic<u32>,
 };
 
 struct ray {
     origin: vec3<f32>,
+    min: f32,
     dir: vec3<f32>,
+    max: f32,
     pixel: u32,
     bounces: u32,
 };
@@ -29,8 +41,9 @@ struct ray_buf {
 };
 
 struct intersection {
-    t: f32,
+    color: vec4<f32>,
     position: vec3<f32>,
+    t: f32,
     normal: vec3<f32>,
     material: u32,
     front_face: u32,
@@ -50,9 +63,6 @@ struct object_list {
     sphere_count: u32,
     spheres: array<sphere>,
 };
-
-let VERY_FAR: f32 = 1e20f;
-let EPSILON: f32 = 3.552713678800501e-15;
 
 @group(0) @binding(0)
 var<uniform> camera: camera_config;
@@ -74,14 +84,14 @@ fn point_at(r: ray, t: f32) -> vec3<f32> {
 }
 
 fn default_intersection() -> intersection {
-    return intersection ( VERY_FAR, vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0), u32(0), 0u );
+    return intersection ( vec4<f32>(1.0), vec3<f32>(0.0), VERY_FAR, vec3<f32>(0.0), 0u, 0u );
 }
 
 fn sqr( x: f32 ) -> f32 {
     return x*x;
 }
 
-fn intersect_sphere(r: ray, s: sphere, t_min: f32, t_max: f32) -> intersection {
+fn intersect_sphere(r: ray, s: sphere) -> intersection {
     var i = default_intersection();
 
     let oc = r.origin - s.center;
@@ -97,9 +107,9 @@ fn intersect_sphere(r: ray, s: sphere, t_min: f32, t_max: f32) -> intersection {
     let sqrtd = sqrt(dis);
 
     var root = (-half_b - sqrtd) / a;
-    if ( root < t_min || t_max < root ) {
+    if ( root < r.min || r.max < root ) {
         root = (-half_b + sqrtd) / a;
-        if ( root < t_min || t_max < root ) {
+        if ( root < r.min || r.max < root ) {
             return i;
         }
     }
@@ -123,7 +133,7 @@ fn intersect_sphere(r: ray, s: sphere, t_min: f32, t_max: f32) -> intersection {
 fn intersect_world(r: ray) -> intersection {
     var closest_hit = default_intersection();
     for(var i: i32 = 0; i < i32(objects.sphere_count); i = i + 1 ) {
-        let hit = intersect_sphere( r, objects.spheres[i], EPSILON, VERY_FAR );
+        let hit = intersect_sphere( r, objects.spheres[i] );
         if ( hit.t < closest_hit.t ) {
             closest_hit = hit;
         }        
@@ -145,7 +155,8 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
         return;
     }
 
-    let i = intersect_world(r);
+    var i = intersect_world(r);
+    i.color = intersection_buffer.intersections[index].color;
 
     storageBarrier();
     intersection_buffer.intersections[index] = i;

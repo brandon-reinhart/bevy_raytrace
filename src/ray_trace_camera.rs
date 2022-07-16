@@ -1,5 +1,4 @@
 use bevy::{
-    math::Vec3Swizzles,
     prelude::*,
     render::{
         render_resource::*,
@@ -10,20 +9,19 @@ use bevy::{
 
 use crate::camera::RayTraceCamera;
 
-use crate::RENDER_TARGET_SIZE;
-
-//pub struct CameraBindGroup(pub BindGroup);
+const CAMERA_FOV: f32 = 1.5708;
 
 #[derive(Copy, Clone, Debug, ShaderType)]
 pub struct CameraGPU {
-    pub frame: u32,
-    pub render_width: u32,
-    pub render_height: u32,
-
-    pub camera_forward: Vec4,
-    pub camera_up: Vec4,
-    pub camera_right: Vec4,
-    pub camera_position: Vec4,
+    pub transform: Mat4,
+    pub forward: Vec3,
+    pub fov: f32,
+    pub up: Vec3,
+    pub image_plane_distance: f32,
+    pub right: Vec3,
+    pub lens_focal_length: f32,
+    pub position: Vec3,
+    pub fstop: f32,
 }
 
 #[derive(Default)]
@@ -47,22 +45,21 @@ fn prepare(
     mut camera_gpu: ResMut<CameraGPUStorage>,
     render_queue: Res<RenderQueue>,
     render_device: Res<RenderDevice>,
-    mut frame: Local<u32>,
 ) {
-    *frame += 1;
-
     camera_gpu.buffer.clear();
 
     let transform = camera.transform;
 
     camera_gpu.buffer.push(CameraGPU {
-        frame: *frame,
-        render_width: RENDER_TARGET_SIZE.0,
-        render_height: RENDER_TARGET_SIZE.1,
-        camera_forward: transform.forward().xyzz(),
-        camera_up: transform.up().xyzz(),
-        camera_right: transform.right().xyzz(),
-        camera_position: transform.translation.xyzz(),
+        transform: transform.compute_matrix(),
+        forward: transform.forward(),
+        up: transform.up(),
+        right: transform.right(),
+        position: transform.translation,
+        fov: CAMERA_FOV,
+        image_plane_distance: 10.0,
+        lens_focal_length: 0.1, // millimeters
+        fstop: 1.0 / 32.0,
     });
 
     camera_gpu

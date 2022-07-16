@@ -1,3 +1,4 @@
+use crate::{RENDER_TARGET_SIZE, SAMPLES_PER_RAY};
 use bevy::{
     prelude::*,
     render::{
@@ -6,13 +7,14 @@ use bevy::{
         RenderApp, RenderStage,
     },
 };
-
-use crate::RENDER_TARGET_SIZE;
+use std::borrow::Cow;
 
 #[derive(ShaderType, Clone, Default, Debug)]
 pub struct RayGPU {
     origin: Vec3,
+    min: f32,
     dir: Vec3,
+    max: f32,
     pixel: u32,
     bounces: u32,
 }
@@ -46,10 +48,11 @@ fn prepare(
     render_device: Res<RenderDevice>,
 ) {
     // How many rays should we need?
-    let ray_count = (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1) as usize;
+    let ray_count = (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1) as usize * SAMPLES_PER_RAY;
 
     // Only re-allocate this buffer if the number of rays changed.
     if ray_buf.buffer.get().rays.len() != ray_count {
+        ray_buf.buffer.label(Some(Cow::from("rays")));
         ray_buf.buffer.get_mut().ray_count = ray_count as u32;
         ray_buf.buffer.get_mut().rays.clear();
         ray_buf

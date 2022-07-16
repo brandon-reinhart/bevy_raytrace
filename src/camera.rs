@@ -32,7 +32,7 @@ fn setup(mut commands: Commands) {
     commands.insert_resource(RayTraceCamera {
         render_width: RENDER_TARGET_SIZE.0,
         render_height: RENDER_TARGET_SIZE.1,
-        transform: Transform::from_xyz(0., 5., 5.).looking_at(Vec3::ZERO, Vec3::Y),
+        transform: Transform::from_xyz(13., 2., 3.).looking_at(Vec3::ZERO, Vec3::Y),
     });
 }
 
