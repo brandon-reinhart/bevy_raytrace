@@ -210,7 +210,7 @@ impl render_graph::Node for RayTraceNode {
 
                 self.generate(world, &mut pass);
 
-                for _ in 0..6 {
+                for _ in 0..3 {
                     self.prepass(world, &mut pass);
                     self.intersect(world, &mut pass);
                     self.shade(world, &mut pass);

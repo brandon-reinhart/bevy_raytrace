@@ -49,26 +49,17 @@ var<storage, read_write> globals: globals_buf;
 @group(1) @binding(0)
 var<storage, read_write> ray_buffer: ray_buf;
 
-//"Xorshift RNGs" by George Marsaglia
-//http://excamera.com/sphinx/article-xorshift.html
-
-fn random_int( seed: u32 ) -> u32
+fn hash3( ni: u32 ) -> vec3<f32>
 {
-    var seed = seed;
-	seed = seed ^ ( seed << u32(13) );
-	seed = seed ^ ( seed >> u32(17) );
-	seed = seed ^ ( seed << u32(5) );
-	return seed;
-}
+    // integer hash copied from Hugo Elias
+    var n = ni;
+	n = (n << 13u) ^ n;
+    n = n * (n * n * 15731u + 789221u) + 1376312589u;
+    let k = n * vec3<u32>(n, n*16807u, n*48271u);
 
-fn random_float( seed: u32 ) -> f32 // [0,1]
-{
-	return f32( random_int( seed ) ) * f32(2.3283064365387e-10);
-}
-
-fn random_float2( seed: u32 ) -> f32
-{
-	return f32(random_int( seed ) >> u32(16)) / f32(65535.0);
+    let l = vec3<u32>(0x7fffffffu);
+    let m = vec3<f32>(f32(k.x&l.x), f32(k.y&l.y), f32(k.z&l.z));
+    return m / f32(0x7fffffff);
 }
 
 // "Essential Ray Generation Shaders", McGuire & Majercik
@@ -127,7 +118,7 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
     let y = (index / globals.render_width) % globals.render_height;
     let pixel = vec2<f32>(f32(x), f32(y));
 
-    let lens_offset = vec2<f32>(00.0f, 0.0f);
+    let lens_offset = vec2<f32>(0.0f, 0.0f);
     //var pray = pinhole_ray(pixel);
     var pray = thin_lens_ray(pixel, lens_offset);
 

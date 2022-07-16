@@ -36,6 +36,9 @@ pub struct MaterialGPU {
     reflectance: i32,
     fuzziness: f32,
     index_of_refraction: f32,
+    // air: 1.0
+    // glass: 1.3-1.7
+    // diamond: 2.4
     pad2: i32,
 }
 
@@ -46,7 +49,7 @@ pub struct MaterialGPUStorage {
 
 #[derive(Default, Clone, ExtractResource)]
 pub struct MaterialCache {
-    materials: IndexMap<String, RayTraceMaterial>,
+    pub materials: IndexMap<String, RayTraceMaterial>,
 }
 
 impl MaterialCache {
@@ -84,7 +87,7 @@ fn init_materials_cache() -> MaterialCache {
         "ground".to_string(),
         RayTraceMaterial {
             reflectance: Reflectance::Lambertian,
-            color: Color::rgba(0.8, 0.8, 0.0, 1.0),
+            color: Color::rgba(0.5, 0.5, 0.5, 1.0),
             fuzziness: 1.0,
             index_of_refraction: 0.0,
         },
@@ -105,8 +108,8 @@ fn init_materials_cache() -> MaterialCache {
         RayTraceMaterial {
             reflectance: Reflectance::Metallic,
             color: Color::rgba(0.8, 0.8, 0.8, 1.0),
-            fuzziness: 0.05,
-            index_of_refraction: 0.0,
+            fuzziness: 0.1,
+            index_of_refraction: 1.5,
         },
     );
 
@@ -114,8 +117,8 @@ fn init_materials_cache() -> MaterialCache {
         "right".to_string(),
         RayTraceMaterial {
             reflectance: Reflectance::Metallic,
-            color: Color::rgba(0.8, 0.6, 0.2, 1.0),
-            fuzziness: 0.4,
+            color: Color::rgba(0.7, 0.6, 0.5, 1.0),
+            fuzziness: 0.0,
             index_of_refraction: 1.5,
         },
     );

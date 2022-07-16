@@ -57,8 +57,8 @@ fn prepare(
         right: transform.right(),
         position: transform.translation,
         fov: CAMERA_FOV,
-        image_plane_distance: 3.0,
-        lens_focal_length: 2.0, // millimeters
+        image_plane_distance: 10.0,
+        lens_focal_length: 0.1, // millimeters
         fstop: 1.0 / 32.0,
     });
 
