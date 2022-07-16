@@ -1,3 +1,4 @@
+use crate::{RENDER_TARGET_SIZE, SAMPLES_PER_RAY};
 use bevy::{
     prelude::*,
     render::{
@@ -7,29 +8,31 @@ use bevy::{
     },
 };
 
-use crate::RENDER_TARGET_SIZE;
-
 #[derive(ShaderType, Clone, Default, Debug)]
 pub struct GlobalsGPU {
     pub frame: u32,
     pub render_width: u32,
     pub render_height: u32,
+    pub samples_per_ray: u32,
 
     // Atomics
     pub clear_index: u32,
     pub generate_index: u32,
     pub intersect_index: u32,
     pub shade_index: u32,
+    pub collect_index: u32,
 }
 
 impl GlobalsGPU {
     fn reset(&mut self) {
         self.render_width = RENDER_TARGET_SIZE.0;
         self.render_height = RENDER_TARGET_SIZE.1;
+        self.samples_per_ray = SAMPLES_PER_RAY as u32;
         self.clear_index = 0;
         self.generate_index = 0;
         self.intersect_index = 0;
         self.shade_index = 0;
+        self.collect_index = 0;
     }
 }
 

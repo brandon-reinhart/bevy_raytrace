@@ -153,10 +153,9 @@ fn prepare(
         materials.buffer.write_buffer(&render_device, &render_queue);
 
         println!(
-            "Materials Buffer: {:?} {:?} {:?}",
+            "Materials Buffer: {:?} {:?}",
             material_count,
             materials.buffer.get().size(),
-            materials.buffer.get()
         );
     }
 }

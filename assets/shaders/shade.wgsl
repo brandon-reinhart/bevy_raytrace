@@ -1,23 +1,36 @@
+let VERY_FAR: f32 = 1e20f;
+let EPSILON: f32 = 0.001;
+let PI:f32 = 3.14159265358979;
+
 struct camera_config {
-    camera_forward: vec3<f32>,
-    camera_up: vec3<f32>,
-    camera_right: vec3<f32>,
-    camera_position: vec3<f32>,
+    transform: mat4x4<f32>,
+    forward: vec3<f32>,
+    fov: f32,
+    up: vec3<f32>,
+    pad0: f32,
+    right: vec3<f32>,
+    pad1: f32,
+    position: vec3<f32>,
+    pad2: f32,
 };
 
 struct globals_buf {
     frame: u32,
     render_width: u32,
     render_height: u32,
+    samples_per_ray: u32,
     clear_index: atomic<u32>,
     generate_index: atomic<u32>,
     intersect_index: atomic<u32>,
     shade_index: atomic<u32>,
+    collect_index: atomic<u32>,
 };
 
 struct ray {
     origin: vec3<f32>,
+    min: f32,
     dir: vec3<f32>,
+    max: f32,
     pixel: u32,
     bounces: u32,
 };
@@ -28,8 +41,9 @@ struct ray_buf {
 };
 
 struct intersection {
-    t: f32,
+    color: vec4<f32>,
     position: vec3<f32>,
+    t: f32,
     normal: vec3<f32>,
     material: u32,
     front_face: u32,
@@ -67,10 +81,6 @@ struct shade {
     extension: ray,
 }
 
-let VERY_FAR: f32 = 1e20f;
-let EPSILON: f32 = 0.00001;
-let PI:f32 = 3.14159265358979;
-
 @group(0) @binding(0)
 var<uniform> camera: camera_config;
 
@@ -88,9 +98,6 @@ var<storage, read> objects: object_list;
 
 @group(2) @binding(1)
 var<storage, read> materials: material_buf;
-
-@group(3) @binding(0)
-var output: texture_storage_2d<rgba32float, read_write>;
 
 fn random_int( seed: u32 ) -> u32
 {
@@ -193,14 +200,14 @@ fn random_unit_vector(rvec: vec3<f32>, seed: u32) -> vec3<f32> {
     return normalize(random_in_unit_sphere(rvec, seed));
 }
 
-fn lambertian( r: ray, i: intersection, m: material, c: vec4<f32>, seed: u32 ) -> shade {
+fn lambertian( r: ray, i: intersection, m: material, c: vec4<f32>, seed: u32 ) -> shade {    
     var offset = i.normal * EPSILON;
     var destination =  i.position + i.normal + offset + random_unit_vector(i.normal, seed);
     var e_origin = i.position + offset;
     var e_dir = normalize(destination - e_origin);
 
     let c = m.color;//vec4<f32>(0.5);
-    let e = ray(e_origin, e_dir, r.pixel, r.bounces+1u);
+    let e = ray(e_origin, EPSILON, e_dir, VERY_FAR, r.pixel, r.bounces+1u);
 
     return shade( c, e );
 }
@@ -216,7 +223,7 @@ fn metallic( r: ray, i: intersection, m: material, seed: u32 ) -> shade {
     let reflected = normalize(reflect(r.dir, i.normal));
     let noise = m.fuzziness*random_unit_vector(i.normal,seed);
     let e_dir = normalize( reflected + noise );
-    let e = ray(e_origin, e_dir, r.pixel, r.bounces+1u);
+    let e = ray(e_origin, EPSILON, e_dir, VERY_FAR, r.pixel, r.bounces+1u);
 
     return shade( c, e );
 }
@@ -259,7 +266,7 @@ fn dielectric( r: ray, i: intersection, m: material, seed: u32 ) -> shade {
         e_dir = refract(unit_dir, i.normal, refraction_ratio);
     //}
 
-    let e = ray(e_origin, e_dir, r.pixel, r.bounces+1u);
+    let e = ray(e_origin, EPSILON, e_dir, VERY_FAR, r.pixel, r.bounces+1u);
 
     return shade( c, e );
 }
@@ -268,9 +275,9 @@ fn dielectric( r: ray, i: intersection, m: material, seed: u32 ) -> shade {
 fn miss(r: ray) -> shade {
     let unit = normalize(r.dir);
     let t = 0.5 * unit.y + 1.0;
-    let sky_gradient = (1.0-t) * vec3<f32>(1.0, 1.0, 1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
+    let sky_gradient = (1.0-t) * vec3<f32>(1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
 
-    let no_extension = ray( vec3<f32>(VERY_FAR,VERY_FAR,VERY_FAR), vec3<f32>(VERY_FAR,VERY_FAR,VERY_FAR), r.pixel, r.bounces+1u );
+    let no_extension = ray( vec3<f32>(VERY_FAR), EPSILON, vec3<f32>(VERY_FAR), VERY_FAR, r.pixel, r.bounces+1u );
 
     return shade( vec4<f32>(sky_gradient, 1.0), no_extension );
 }
@@ -294,26 +301,26 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
     let y = u32( floor(f32(pixel) / f32(globals.render_width)) );
     let x = pixel - (y*globals.render_width);
 
-    var color = textureLoad(output, vec2<i32>(i32(x), i32(y)));
+    var color = intersection_buffer.intersections[index].color;
 
     if ( i.t == VERY_FAR ) {
         var s = miss(r);
-        color = vec4<f32>( color.xyz * s.color.xyz, 1.0);
+        color *= s.color;
 
         ray_buffer.rays[index] = s.extension;
     } else {
         let material = materials.m[i.material];
         if ( r.bounces == 5u ) {
-            color = vec4<f32>(color.xyz * vec3<f32>(0.0), 1.0);
-            ray_buffer.rays[index] = ray( vec3<f32>(VERY_FAR,VERY_FAR,VERY_FAR), vec3<f32>(VERY_FAR,VERY_FAR,VERY_FAR), r.pixel, r.bounces+1u );
+            ray_buffer.rays[index] = ray( vec3<f32>(VERY_FAR), EPSILON, vec3<f32>(VERY_FAR), VERY_FAR, r.pixel, r.bounces+1u );
+            color = vec4<f32>(0.0, 0.0, 0.0, 1.0 );
         } else {
             if ( material.reflectance == 0 ) {
                 var s = lambertian(r, i, material, color, seed);
-                color = vec4<f32>(color.xyz * s.color.xyz, 1.0);
+                color *= s.color;
                 ray_buffer.rays[index] = s.extension;
             } else if ( material.reflectance == 1 ) {
                 var s = metallic(r, i, material, seed);
-                color = vec4<f32>(color.xyz * s.color.xyz, 1.0);                
+                color = vec4<f32>(color.xyz * s.color.xyz, 1.0);
                 ray_buffer.rays[index] = s.extension;
             } else if ( material.reflectance == 2 ) {
                 var s = dielectric(r, i, material, seed);
@@ -324,5 +331,6 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
     }
 
     storageBarrier();
-    textureStore(output, vec2<i32>(i32(x), i32(y)), color);
+    intersection_buffer.intersections[index].color = color;
+//    textureStore(output, vec2<i32>(i32(x), i32(y)), color);
 }

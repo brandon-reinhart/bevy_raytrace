@@ -1,23 +1,36 @@
+let VERY_FAR: f32 = 1e20f;
+let EPSILON: f32 = 0.001;
+let PI:f32 = 3.14159265358979;
+
 struct camera_config {
-    camera_forward: vec3<f32>,
-    camera_up: vec3<f32>,
-    camera_right: vec3<f32>,
-    camera_position: vec3<f32>,
+    transform: mat4x4<f32>,
+    forward: vec3<f32>,
+    fov: f32,
+    up: vec3<f32>,
+    image_plane_distance: f32,
+    right: vec3<f32>,
+    lens_focal_length: f32,
+    position: vec3<f32>,
+    fstop: f32,    
 };
 
 struct globals_buf {
     frame: u32,
     render_width: u32,
     render_height: u32,
+    samples_per_ray: u32,
     clear_index: atomic<u32>,
     generate_index: atomic<u32>,
     intersect_index: atomic<u32>,
     shade_index: atomic<u32>,
+    collect_index: atomic<u32>,
 };
 
 struct ray {
     origin: vec3<f32>,
+    min: f32,
     dir: vec3<f32>,
+    max: f32,
     pixel: u32,
     bounces: u32,
 };
@@ -58,6 +71,50 @@ fn random_float2( seed: u32 ) -> f32
 	return f32(random_int( seed ) >> u32(16)) / f32(65535.0);
 }
 
+// "Essential Ray Generation Shaders", McGuire & Majercik
+fn pinhole_ray( pixel: vec2<f32> ) -> ray {
+    let tan_half_angle = tan(camera.fov / 2.f);
+    var aspect_scale = 0.0;
+//    if ( camera.fov_dir == 0 ) {
+        aspect_scale = f32(globals.render_width);
+  //  } else {
+    //    aspect_scale = globals.render_height;
+    //}
+
+    let half_w = f32(globals.render_width) / 2.0;
+    let half_h = f32(globals.render_height) / 2.0;
+
+    var ray_dir = vec3<f32>( vec2<f32>(pixel.x - half_w, -pixel.y + half_h) * tan_half_angle / aspect_scale, -1.0);
+    let ray_dir = normalize( ray_dir );
+
+    let pixel_index = u32( pixel.y * f32(globals.render_width) + pixel.x );
+    return ray( vec3<f32>(0.f), EPSILON, ray_dir, VERY_FAR, pixel_index, 0u );
+}
+
+fn thin_lens_ray( pixel: vec2<f32>, lens_offset: vec2<f32> ) -> ray {
+    var ray = pinhole_ray( pixel );
+
+    let theta = lens_offset.x + 2.f * PI;
+    let radius = lens_offset.y;
+
+    let u = cos(theta) * sqrt(radius);
+    let v = sin(theta) * sqrt(radius);
+
+    let focus_plane = (camera.image_plane_distance * camera.lens_focal_length) /
+    (camera.image_plane_distance - camera.lens_focal_length);
+
+    let focus_point = ray.dir * (focus_plane / dot(ray.dir, vec3<f32>(0.f, 0.f, -1.f)));
+
+    let circle_of_confusion_radius = camera.lens_focal_length / (2.f * camera.fstop);
+
+    ray.origin = vec3<f32>(1.f, 0.f, 0.f) * (u * circle_of_confusion_radius) +
+    vec3<f32>(0.f, 1.f, 0.f) * (v * circle_of_confusion_radius);
+
+    ray.dir = normalize(focus_point - ray.origin);
+
+    return ray;
+}
+
 @compute @workgroup_size(128, 1, 1)
 fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
 {
@@ -68,30 +125,15 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
 
     let x = index % globals.render_width;
     let y = (index / globals.render_width) % globals.render_height;
+    let pixel = vec2<f32>(f32(x), f32(y));
 
-    // What is the origin of these bit masks?
-    // todo: What is a standard way of generated a random seed?
-	let seed = (globals.frame * u32(147565741)) * u32(720898027) * index;
+    let lens_offset = vec2<f32>(00.0f, 0.0f);
+    //var pray = pinhole_ray(pixel);
+    var pray = thin_lens_ray(pixel, lens_offset);
 
-    // Get a stratified point inside the pixel?
-    // todo: Read about good techniques for determining the ray.
-    // For now, a simple (bad) approach:
-    let x = f32(x);// + random_float2(seed) / 1000.0;
-    let y = f32(y);// + random_float2(seed) / 1000.0;
-
-	let normalized_i = ( x / f32(globals.render_width) ) - 0.5;
-    let normalized_j = ( ( f32(globals.render_height) - y ) / f32(globals.render_height) ) - 0.5;
-
-    var dir_to_focal_plane = camera.camera_forward + normalized_i * camera.camera_right + normalized_j * camera.camera_up;
-    dir_to_focal_plane = normalize( dir_to_focal_plane );
-    let convergence_point = camera.camera_position + dir_to_focal_plane;
-
-    let origin = camera.camera_position;// + camera.camera_right * lens.x + camera.camera_up * lens.y;
-    let direction = normalize( convergence_point - origin );
-
-    let pixel = u32( y * f32(globals.render_width) + x );
-    var r = ray( origin, direction, pixel, 0u );
+    pray.origin += camera.transform.w.xyz;
+    pray.dir = (camera.transform * vec4<f32>(pray.dir, 0.0)).xyz;
 
     storageBarrier();
-    ray_buffer.rays[index] = r;
+    ray_buffer.rays[index] = pray;
 }   

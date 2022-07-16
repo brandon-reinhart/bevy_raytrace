@@ -1,3 +1,9 @@
+use crate::plugin::{
+    CameraGlobalsBindGroup, ObjectsMaterialsBindGroup, RaysIntersectionsBindGroup,
+};
+use crate::ray_trace_output::OutputImageBindGroup;
+use crate::ray_trace_pipeline::*;
+use crate::{RENDER_TARGET_SIZE, SAMPLES_PER_RAY};
 use bevy::{
     prelude::*,
     render::{
@@ -7,14 +13,7 @@ use bevy::{
     },
 };
 
-use crate::plugin::{
-    CameraGlobalsBindGroup, ObjectsMaterialsBindGroup, RaysIntersectionsBindGroup,
-};
-use crate::ray_trace_output::OutputImageBindGroup;
-use crate::ray_trace_pipeline::*;
-
 const WORKGROUP_SIZE: u32 = 128;
-use crate::RENDER_TARGET_SIZE;
 
 enum RayTraceState {
     Loading,
@@ -35,7 +34,8 @@ impl Default for RayTraceNode {
 
 impl RayTraceNode {
     fn clear<'a>(&self, world: &'a World, pass: &mut ComputePass<'a>) {
-        let num_dispatch = (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1) / WORKGROUP_SIZE;
+        let num_dispatch =
+            (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1 * SAMPLES_PER_RAY as u32) / WORKGROUP_SIZE;
 
         let camera_globals = &world.resource::<CameraGlobalsBindGroup>().0;
         let rays_intersections = &world.resource::<RaysIntersectionsBindGroup>().0;
@@ -75,7 +75,8 @@ impl RayTraceNode {
     }
 
     fn generate<'a>(&self, world: &'a World, pass: &mut ComputePass<'a>) {
-        let num_dispatch = (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1) / WORKGROUP_SIZE;
+        let num_dispatch =
+            (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1 * SAMPLES_PER_RAY as u32) / WORKGROUP_SIZE;
 
         let camera_globals = &world.resource::<CameraGlobalsBindGroup>().0;
         let rays_intersections = &world.resource::<RaysIntersectionsBindGroup>().0;
@@ -94,7 +95,8 @@ impl RayTraceNode {
     }
 
     fn intersect<'a>(&self, world: &'a World, pass: &mut ComputePass<'a>) {
-        let num_dispatch = (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1) / WORKGROUP_SIZE;
+        let num_dispatch =
+            (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1 * SAMPLES_PER_RAY as u32) / WORKGROUP_SIZE;
 
         let camera_globals = &world.resource::<CameraGlobalsBindGroup>().0;
         let rays_intersections = &world.resource::<RaysIntersectionsBindGroup>().0;
@@ -115,12 +117,12 @@ impl RayTraceNode {
     }
 
     fn shade<'a>(&self, world: &'a World, pass: &mut ComputePass<'a>) {
-        let num_dispatch = (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1) / WORKGROUP_SIZE;
+        let num_dispatch =
+            (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1 * SAMPLES_PER_RAY as u32) / WORKGROUP_SIZE;
 
         let camera_globals = &world.resource::<CameraGlobalsBindGroup>().0;
         let rays_intersections = &world.resource::<RaysIntersectionsBindGroup>().0;
         let objects_materials = &world.resource::<ObjectsMaterialsBindGroup>().0;
-        let output = &world.resource::<OutputImageBindGroup>().0;
 
         let pipeline_cache = world.resource::<PipelineCache>();
         let pipeline = world.resource::<RayTracePipeline>();
@@ -128,11 +130,32 @@ impl RayTraceNode {
         pass.set_bind_group(0, camera_globals, &[]);
         pass.set_bind_group(1, rays_intersections, &[]);
         pass.set_bind_group(2, objects_materials, &[]);
-        pass.set_bind_group(3, output, &[]);
         // also shadow rays
 
         let pipeline = pipeline_cache
             .get_compute_pipeline(pipeline.pipelines.shade)
+            .unwrap();
+        pass.set_pipeline(pipeline);
+        pass.dispatch_workgroups(num_dispatch, 1, 1);
+    }
+
+    fn collect<'a>(&self, world: &'a World, pass: &mut ComputePass<'a>) {
+        let num_dispatch =
+            (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1 * SAMPLES_PER_RAY as u32) / WORKGROUP_SIZE;
+
+        let camera_globals = &world.resource::<CameraGlobalsBindGroup>().0;
+        let rays_intersections = &world.resource::<RaysIntersectionsBindGroup>().0;
+        let output = &world.resource::<OutputImageBindGroup>().0;
+
+        let pipeline_cache = world.resource::<PipelineCache>();
+        let pipeline = world.resource::<RayTracePipeline>();
+
+        pass.set_bind_group(0, camera_globals, &[]);
+        pass.set_bind_group(1, rays_intersections, &[]);
+        pass.set_bind_group(2, output, &[]);
+
+        let pipeline = pipeline_cache
+            .get_compute_pipeline(pipeline.pipelines.collect)
             .unwrap();
         pass.set_pipeline(pipeline);
         pass.dispatch_workgroups(num_dispatch, 1, 1);
@@ -160,6 +183,7 @@ impl render_graph::Node for RayTraceNode {
                     && is_pipeline_ready(pipeline_cache, pipeline.pipelines.generate)
                     && is_pipeline_ready(pipeline_cache, pipeline.pipelines.intersect)
                     && is_pipeline_ready(pipeline_cache, pipeline.pipelines.shade)
+                    && is_pipeline_ready(pipeline_cache, pipeline.pipelines.collect)
                 {
                     self.state = RayTraceState::Ready;
                 }
@@ -183,6 +207,7 @@ impl render_graph::Node for RayTraceNode {
                     .begin_compute_pass(&ComputePassDescriptor::default());
 
                 self.clear(world, &mut pass);
+
                 self.generate(world, &mut pass);
 
                 for _ in 0..6 {
@@ -190,6 +215,8 @@ impl render_graph::Node for RayTraceNode {
                     self.intersect(world, &mut pass);
                     self.shade(world, &mut pass);
                 }
+
+                self.collect(world, &mut pass);
             }
         }
 

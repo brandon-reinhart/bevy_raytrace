@@ -1,4 +1,4 @@
-use crate::RENDER_TARGET_SIZE;
+use crate::{RENDER_TARGET_SIZE, SAMPLES_PER_RAY};
 use bevy::{
     prelude::*,
     render::{
@@ -10,8 +10,9 @@ use bevy::{
 
 #[derive(ShaderType, Clone, Default, Debug)]
 pub struct IntersectionGPU {
-    t: f32,
+    color: Vec4,
     point: Vec3,
+    t: f32,
     normal: Vec3,
     material: u32,
     front_face: u32,
@@ -39,7 +40,7 @@ fn prepare(
     render_device: Res<RenderDevice>,
 ) {
     // Allocate as many intersections as we have rays.
-    let ray_count = (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1) as usize;
+    let ray_count = (RENDER_TARGET_SIZE.0 * RENDER_TARGET_SIZE.1) as usize * SAMPLES_PER_RAY;
 
     if intersections.buffer.get().len() != ray_count {
         intersections.buffer.get_mut().clear();

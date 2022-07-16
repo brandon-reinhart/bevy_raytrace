@@ -53,6 +53,34 @@ struct intersection_buf {
     intersections: array<intersection>,
 };
 
+struct sphere {
+    center: vec3<f32>,
+    radius: f32,
+    material: u32,
+};
+
+struct object_list {
+    sphere_count: u32,
+    spheres: array<sphere>,
+};
+
+struct material {
+    color: vec4<f32>,
+    reflectance: i32,
+    fuzziness: f32,
+    index_of_refraction: f32,
+    pad2: i32,
+}
+
+struct material_buf {
+    m: array<material>,
+}
+
+struct shade {
+    color: vec4<f32>,
+    extension: ray,
+}
+
 @group(0) @binding(0)
 var<uniform> camera: camera_config;
 
@@ -71,17 +99,28 @@ var output: texture_storage_2d<rgba32float, read_write>;
 @compute @workgroup_size(128, 1, 1)
 fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
 {
-    let index = atomicAdd( &globals.clear_index, 1u );
+    let index = atomicAdd( &globals.collect_index, 1u );
     if ( index >= ray_buffer.ray_count ) {
         return;
     }
 
-    let x = index % globals.render_width;
-    let y = (index / globals.render_width) % globals.render_height;
+    let r = ray_buffer.rays[index];
+    var pixel = r.pixel;
+    let y = u32( floor(f32(pixel) / f32(globals.render_width)) );
+    let x = pixel - (y*globals.render_width);
 
-    let clear = vec4<f32>( vec3<f32>( 1.0 ), 1.0 );
+    let dim = globals.render_width * globals.render_height;
+
+    var accumulated_color = vec3<f32>( 0.0 );
+    for ( var i=0u; i<globals.samples_per_ray; i=i+1u) {
+        var intersection_index = index;// + dim*i;
+        var intersection = intersection_buffer.intersections[intersection_index];
+
+        accumulated_color += intersection.color.xyz;
+    }
+
+    let final_color = vec4<f32>( accumulated_color / f32(globals.samples_per_ray), 1.0 );
 
     storageBarrier();
-    textureStore(output, vec2<i32>(i32(x), i32(y)), clear);
-    intersection_buffer.intersections[index].color = clear;
+    textureStore(output, vec2<i32>(i32(x), i32(y)), final_color);
 }
