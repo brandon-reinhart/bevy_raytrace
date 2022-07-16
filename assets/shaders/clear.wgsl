@@ -1,8 +1,4 @@
 struct camera_config {
-    frame: u32,
-    render_width: u32,
-    render_height: u32,
-
     camera_forward: vec3<f32>,
     camera_up: vec3<f32>,
     camera_right: vec3<f32>,
@@ -10,6 +6,9 @@ struct camera_config {
 };
 
 struct globals_buf {
+    frame: u32,
+    render_width: u32,
+    render_height: u32,
     clear_index: atomic<u32>,
     generate_index: atomic<u32>,
     intersect_index: atomic<u32>,
@@ -47,8 +46,8 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
         return;
     }
 
-    let x = index % camera.render_width;
-    let y = (index / camera.render_width) % camera.render_height;
+    let x = index % globals.render_width;
+    let y = (index / globals.render_width) % globals.render_height;
 
     let black = vec4<f32>( vec3<f32>( 1.0 ), 1.0 );
 

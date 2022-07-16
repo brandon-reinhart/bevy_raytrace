@@ -7,8 +7,14 @@ use bevy::{
     },
 };
 
+use crate::RENDER_TARGET_SIZE;
+
 #[derive(ShaderType, Clone, Default, Debug)]
 pub struct GlobalsGPU {
+    pub frame: u32,
+    pub render_width: u32,
+    pub render_height: u32,
+
     // Atomics
     pub clear_index: u32,
     pub generate_index: u32,
@@ -18,6 +24,8 @@ pub struct GlobalsGPU {
 
 impl GlobalsGPU {
     fn reset(&mut self) {
+        self.render_width = RENDER_TARGET_SIZE.0;
+        self.render_height = RENDER_TARGET_SIZE.1;
         self.clear_index = 0;
         self.generate_index = 0;
         self.intersect_index = 0;
@@ -46,10 +54,14 @@ fn prepare(
     mut globals: ResMut<GlobalsGPUStorage>,
     render_queue: Res<RenderQueue>,
     render_device: Res<RenderDevice>,
+    mut frame: Local<u32>,
 ) {
     globals.buffer.get_mut().reset();
+    globals.buffer.get_mut().frame = *frame;
 
     globals.buffer.write_buffer(&render_device, &render_queue);
+
+    *frame += 1;
 }
 
 pub fn describe(binding: u32) -> BindGroupLayoutEntry {

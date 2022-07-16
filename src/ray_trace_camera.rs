@@ -16,10 +16,6 @@ use crate::RENDER_TARGET_SIZE;
 
 #[derive(Copy, Clone, Debug, ShaderType)]
 pub struct CameraGPU {
-    pub frame: u32,
-    pub render_width: u32,
-    pub render_height: u32,
-
     pub camera_forward: Vec4,
     pub camera_up: Vec4,
     pub camera_right: Vec4,
@@ -47,18 +43,12 @@ fn prepare(
     mut camera_gpu: ResMut<CameraGPUStorage>,
     render_queue: Res<RenderQueue>,
     render_device: Res<RenderDevice>,
-    mut frame: Local<u32>,
 ) {
-    *frame += 1;
-
     camera_gpu.buffer.clear();
 
     let transform = camera.transform;
 
     camera_gpu.buffer.push(CameraGPU {
-        frame: *frame,
-        render_width: RENDER_TARGET_SIZE.0,
-        render_height: RENDER_TARGET_SIZE.1,
         camera_forward: transform.forward().xyzz(),
         camera_up: transform.up().xyzz(),
         camera_right: transform.right().xyzz(),

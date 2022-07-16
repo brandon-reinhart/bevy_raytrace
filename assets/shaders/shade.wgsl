@@ -1,8 +1,4 @@
 struct camera_config {
-    frame: u32,
-    render_width: u32,
-    render_height: u32,
-
     camera_forward: vec3<f32>,
     camera_up: vec3<f32>,
     camera_right: vec3<f32>,
@@ -10,6 +6,9 @@ struct camera_config {
 };
 
 struct globals_buf {
+    frame: u32,
+    render_width: u32,
+    render_height: u32,
     clear_index: atomic<u32>,
     generate_index: atomic<u32>,
     intersect_index: atomic<u32>,
@@ -117,7 +116,7 @@ fn rand(c: vec2<f32>) -> f32 {
 }
 
 fn noise( p: vec2<f32>, freq: f32 ) -> f32 {
-	let unit = f32(camera.render_width)/freq;
+	let unit = f32(globals.render_width)/freq;
 	let ij = floor(p/unit);
 	var xy = (p%unit)/unit;
 	//xy = 3.*xy*xy-2.*xy*xy*xy;
@@ -284,7 +283,7 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
         return;
     }
 
-	let seed = (camera.frame * u32(147565741)) * u32(720898027) * index;
+	let seed = (globals.frame * u32(147565741)) * u32(720898027) * index;
 
     let r = ray_buffer.rays[index];
     if (r.origin.x == VERY_FAR) {
@@ -292,8 +291,8 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>)
     }
     let i = intersection_buffer.intersections[index];
     var pixel = r.pixel;
-    let y = u32( floor(f32(pixel) / f32(camera.render_width)) );
-    let x = pixel - (y*camera.render_width);
+    let y = u32( floor(f32(pixel) / f32(globals.render_width)) );
+    let x = pixel - (y*globals.render_width);
 
     var color = textureLoad(output, vec2<i32>(i32(x), i32(y)));
 

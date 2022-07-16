@@ -1,8 +1,4 @@
 struct camera_config {
-    frame: u32,
-    render_width: u32,
-    render_height: u32,
-
     camera_forward: vec3<f32>,
     camera_up: vec3<f32>,
     camera_right: vec3<f32>,
@@ -10,6 +6,9 @@ struct camera_config {
 };
 
 struct globals_buf {
+    frame: u32,
+    render_width: u32,
+    render_height: u32,
     clear_index: atomic<u32>,
     generate_index: atomic<u32>,
     intersect_index: atomic<u32>,
