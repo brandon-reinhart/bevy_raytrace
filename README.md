@@ -1,3 +1,3 @@
 # bevy_raytrace
 
-A toy wavefront ray tracer using Bevy. Just for learning.
+A toy ray tracer using Bevy. Just for learning.
