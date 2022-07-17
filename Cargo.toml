@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-#bevy = { git = "https://github.com/bevyengine/bevy.git" }
-bevy = { path = "../bevy" }
+bevy = { git = "https://github.com/bevyengine/bevy.git" }
+#bevy = { path = "../bevy" }
 #iyes_loopless = { git = "https://github.com/IyesGames/iyes_loopless.git?branch=bevy_main" }
 indexmap = "1.9.1"
 rand = "0.8.5"

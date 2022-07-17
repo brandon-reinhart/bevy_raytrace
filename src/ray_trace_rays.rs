@@ -7,7 +7,6 @@ use bevy::{
         RenderApp, RenderStage,
     },
 };
-use std::borrow::Cow;
 
 #[derive(ShaderType, Clone, Default, Debug)]
 pub struct RayGPU {
@@ -52,7 +51,6 @@ fn prepare(
 
     // Only re-allocate this buffer if the number of rays changed.
     if ray_buf.buffer.get().rays.len() != ray_count {
-        ray_buf.buffer.label(Some(Cow::from("rays")));
         ray_buf.buffer.get_mut().ray_count = ray_count as u32;
         ray_buf.buffer.get_mut().rays.clear();
         ray_buf
@@ -66,7 +64,7 @@ fn prepare(
         println!(
             "Ray Buffer: {:?} {:?}",
             ray_count,
-            ray_buf.buffer.get().rays.size()
+            ray_buf.buffer.get().rays.size(),
         );
     }
 }
